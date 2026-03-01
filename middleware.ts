@@ -13,8 +13,8 @@ const COOKIE_NAME = "docket_session";
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  // Env-check must bypass auth — check first
-  if (pathname === "/api/env-check" || pathname.startsWith("/api/auth/env-check")) {
+  // Env-check must bypass auth — check first (match any env-check path)
+  if (pathname.includes("/env-check")) {
     return NextResponse.next();
   }
 

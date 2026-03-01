@@ -30,12 +30,19 @@ export async function GET() {
     }
   }
 
-  return NextResponse.json({
-    envLoaded: hasOpenAI,
-    supabaseUrl: hasSupabaseUrl,
-    supabaseKey: hasSupabaseKey,
-    authSecret: hasAuthSecret,
-    supabaseConnected,
-    userCount,
-  });
+  return NextResponse.json(
+    {
+      envLoaded: hasOpenAI,
+      supabaseUrl: hasSupabaseUrl,
+      supabaseKey: hasSupabaseKey,
+      authSecret: hasAuthSecret,
+      supabaseConnected,
+      userCount,
+    },
+    {
+      headers: {
+        "Cache-Control": "no-store, no-cache, must-revalidate",
+      },
+    }
+  );
 }
