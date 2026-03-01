@@ -232,6 +232,8 @@ APPROVE when the answer summarizes, paraphrases, or draws from the chunks. When 
 - (Fact-check) Pure opinion inputs get OPINION label, not flat decline
 
 IMPORTANT — do NOT reject for these (common false triggers):
+- (Fact-check) Mix of VERIFIED, UNVERIFIABLE, and OPINION per claim — when VERIFIED claims cite chunks and UNVERIFIABLE means "no information on this topic" in chunks, APPROVE. This is correct fact-check behavior.
+- (Fact-check) Names, dates, or details in VERIFIED claim icc_says that paraphrase or restate chunk content — APPROVE. Paraphrasing from chunks is not hallucination.
 - Partial answers that answer what they can and explicitly state "this detail is not available in current ICC records" for the rest — this is correct and desired behavior, not a violation
 - Listing categories or types of evidence from chunks (e.g., "The DCC references witness statements and documentary evidence [1]") — this is factual reporting, NOT evaluating evidence strength
 - Reasonable paraphrasing that restates chunk content in simpler language, even if the exact words differ from the source
