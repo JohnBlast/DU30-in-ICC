@@ -57,22 +57,22 @@ const PROMPTS: Array<{
   { id: 30, category: "redacted", query: "What's behind the redacted section on page 15?", expectIntent: "out_of_scope", expectAnswer: "flat_decline" },
 ];
 
-const FLAT_DECLINE = "This is not addressed in current ICC records.";
+const FLAT_DECLINE_PREFIX = "this is not addressed in current ICC records.";
 
 function checkExpected(answer: string, expected: string): boolean {
   const a = answer.trim().toLowerCase();
+  const isDecline = a.includes("not addressed in current ICC records");
   if (expected === "flat_decline") {
-    return a === FLAT_DECLINE.toLowerCase();
+    return isDecline && a.length > FLAT_DECLINE_PREFIX.length; // explanatory decline
   }
   if (expected === "redaction") {
-    return a.includes("redacted") && (a.includes("cannot investigate") || a.includes("cannot speculate"));
+    return a.includes("redacted") && (a.includes("cannot investigate") || a.includes("cannot disclose") || a.includes("cannot speculate"));
   }
   if (expected === "substantive") {
-    return a.length > 50 && !a.startsWith(FLAT_DECLINE.toLowerCase());
+    return a.length > 50 && !isDecline;
   }
   if (expected === "substantive_or_decline") {
-    const isSubstantive = a.length > 50 && !a.startsWith(FLAT_DECLINE.toLowerCase());
-    const isDecline = a.startsWith(FLAT_DECLINE.toLowerCase());
+    const isSubstantive = a.length > 50 && !isDecline;
     return isSubstantive || isDecline;
   }
   return true;

@@ -6,7 +6,7 @@
 import type OpenAI from "openai";
 import { createClient } from "@supabase/supabase-js";
 import { getOpenAIClient } from "./openai-client";
-import { classifyIntent, REDACTION_RESPONSE } from "./intent-classifier";
+import { classifyIntent } from "./intent-classifier";
 import { intentToRagIndexes } from "./intent";
 import { retrieve, type RetrievalChunk } from "./retrieve";
 import { buildSystemPrompt, JUDGE_SYSTEM_PROMPT, buildJudgeUserMessage } from "./prompts";
@@ -16,7 +16,7 @@ import { logEvent } from "./logger";
 const MAX_ANSWER_TOKENS = 1024;
 const MAX_JUDGE_TOKENS = 256;
 const FALLBACK_BLOCKED =
-  "This answer could not be verified against ICC documents. Please rephrase your question.";
+  "This answer could not be verified against ICC documents. Try rephrasing your question or asking about a different aspect of the case.";
 
 export interface Citation {
   marker: string;
@@ -271,8 +271,11 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
 
   if (intent === "out_of_scope") {
     const kbDate = await getKnowledgeBaseLastUpdated();
+    const answer = isRedaction
+      ? "This content is redacted in ICC records. The Docket cannot investigate or disclose redacted material."
+      : "This is not addressed in current ICC records. Your question asks for opinions, speculation, or information outside the scope of ICC case documents—the Docket only answers from official records about the Philippines case.";
     return {
-      answer: isRedaction ? REDACTION_RESPONSE : "This is not addressed in current ICC records.",
+      answer,
       citations: [],
       warning: null,
       verified: true,
@@ -294,7 +297,8 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     logEvent("chat.flat_decline", "warn", { intent, reason: "chunks=0" });
     const kbDate = await getKnowledgeBaseLastUpdated();
     return {
-      answer: "This is not addressed in current ICC records.",
+      answer:
+        "This is not addressed in current ICC records. We couldn't find relevant information on this in the ingested ICC documents—the knowledge base may not include documents that address this topic yet.",
       citations: [],
       warning: null,
       verified: true,
@@ -395,7 +399,8 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   // Multi-intent: append flat decline for the out-of-scope part
   if (multiIntent?.hasInvalidPart) {
     parsed.answer =
-      parsed.answer.trim() + "\n\nThis is not addressed in current ICC records.";
+      parsed.answer.trim() +
+      "\n\nThe second part of your question asks for opinions or information outside ICC case documents, so we can't answer it from the records.";
   }
 
   return parsed;

@@ -5,7 +5,7 @@
 
 import { chat } from "../lib/chat";
 
-const FLAT_DECLINE = "This is not addressed in current ICC records.";
+const FLAT_DECLINE_PATTERN = /not addressed in current ICC records/i;
 
 const TESTS: Array<{
   id: string;
@@ -86,7 +86,7 @@ async function main() {
     try {
       const result = await chat({ query: t.query });
 
-      if (t.expectNotFlatDecline && result.answer.trim() === FLAT_DECLINE) {
+      if (t.expectNotFlatDecline && FLAT_DECLINE_PATTERN.test(result.answer)) {
         console.log("FAIL (flat decline)");
         failed++;
         continue;

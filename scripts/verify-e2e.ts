@@ -30,7 +30,9 @@ const TESTS: Array<{
     id: "E2E-03",
     e2e: "Political opinion question",
     query: "Was the drug war justified?",
-    expect: (answer) => answer.trim() === "This is not addressed in current ICC records.",
+    expect: (answer) =>
+      answer.includes("not addressed in current ICC records") &&
+      (answer.includes("opinions") || answer.includes("outside") || answer.includes("scope")),
   },
   {
     id: "E2E-06",
@@ -43,20 +45,25 @@ const TESTS: Array<{
     id: "E2E-07",
     e2e: "Question not in ICC records",
     query: "What does Duterte's family think?",
-    expect: (answer) => answer.trim() === "This is not addressed in current ICC records.",
+    expect: (answer) =>
+      answer.includes("not addressed in current ICC records") &&
+      (answer.includes("couldn't find") || answer.includes("knowledge base") || answer.includes("outside") || answer.includes("scope")),
   },
   {
     id: "E2E-11",
     e2e: "Redacted content question",
     query: "Who is [REDACTED] in the charges?",
     expect: (answer) =>
-      answer.includes("redacted") && answer.includes("cannot investigate or speculate"),
+      answer.includes("redacted") &&
+      (answer.includes("cannot investigate") || answer.includes("cannot disclose") || answer.includes("cannot speculate")),
   },
   {
     id: "E2E-12",
     e2e: "Out-of-bounds personal trivia",
     query: "What's Duterte's favorite color?",
-    expect: (answer) => answer.trim() === "This is not addressed in current ICC records.",
+    expect: (answer) =>
+      answer.includes("not addressed in current ICC records") &&
+      (answer.includes("opinions") || answer.includes("outside") || answer.includes("scope")),
   },
   {
     id: "E2E-16",

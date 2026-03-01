@@ -7,8 +7,8 @@
 
 import { chat } from "../lib/chat";
 
-const FLAT_DECLINE = "This is not addressed in current ICC records.";
-const REDACTED_RESPONSE = /redacted|cannot investigate or speculate/i;
+const FLAT_DECLINE_PATTERN = /not addressed in current ICC records/i;
+const REDACTED_RESPONSE = /redacted|cannot investigate|cannot disclose|cannot speculate/i;
 
 type Expectation = "substantive" | "flat_decline" | "redacted_or_decline";
 
@@ -210,7 +210,7 @@ async function main() {
       let ok = false;
 
       if (t.expect === "flat_decline") {
-        ok = answer === FLAT_DECLINE;
+        ok = FLAT_DECLINE_PATTERN.test(answer);
         if (!ok) {
           console.log("FAIL (expected flat decline)");
           console.log(`  Got: ${answer.slice(0, 120)}…`);
@@ -218,30 +218,30 @@ async function main() {
           continue;
         }
       } else if (t.expect === "redacted_or_decline") {
-        ok = REDACTED_RESPONSE.test(answer) || answer === FLAT_DECLINE;
+        ok = REDACTED_RESPONSE.test(answer) || FLAT_DECLINE_PATTERN.test(answer);
       } else {
         // substantive: accept real answer OR "not addressed" (KB limitation)
         const isUnverified = /could not be verified|rephrase your question/i.test(answer);
         const minLen = t.minLength ?? 20;
-        ok =
-          (answer !== FLAT_DECLINE && !isUnverified && answer.length >= minLen) ||
-          answer === FLAT_DECLINE;
+        const isDecline = FLAT_DECLINE_PATTERN.test(answer);
+        ok = (!isDecline && !isUnverified && answer.length >= minLen) || isDecline;
         if (ok) {
           results.push({
             id: t.id,
             category: t.category,
-            status: answer === FLAT_DECLINE ? "NOT_IN_KB" : "PASS",
+            status: isDecline ? "NOT_IN_KB" : "PASS",
             answerPreview:
-              answer === FLAT_DECLINE ? "Not in current ICC records" : answer.slice(0, 80) + (answer.length > 80 ? "…" : ""),
+              isDecline ? "Not in current ICC records" : answer.slice(0, 80) + (answer.length > 80 ? "…" : ""),
           });
         }
       }
 
       if (ok) {
+        const isDecline = FLAT_DECLINE_PATTERN.test(answer);
         const status =
-          t.expect === "flat_decline" ? "PASS" : answer === FLAT_DECLINE ? "NOT_IN_KB" : "PASS";
+          t.expect === "flat_decline" ? "PASS" : isDecline ? "NOT_IN_KB" : "PASS";
         console.log(status);
-        if (answer !== FLAT_DECLINE) {
+        if (!isDecline) {
           const citeCount = result.citations?.length ?? 0;
           console.log(`  → ${answer.slice(0, 100)}… [${citeCount} citations]`);
         }
