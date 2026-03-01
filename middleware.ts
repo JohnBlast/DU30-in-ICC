@@ -13,6 +13,11 @@ const COOKIE_NAME = "docket_session";
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Env-check must bypass auth — check first
+  if (pathname === "/api/env-check" || pathname.startsWith("/api/auth/env-check")) {
+    return NextResponse.next();
+  }
+
   // Allow public paths
   if (pathname === "/login") {
     const token = req.cookies.get(COOKIE_NAME)?.value;
@@ -28,12 +33,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.next();
   }
 
-  if (
-    pathname.startsWith("/api/auth/") ||
-    pathname === "/api/env-check" ||
-    pathname.startsWith("/_next/") ||
-    pathname.includes(".")
-  ) {
+  if (pathname.startsWith("/api/auth/") || pathname.startsWith("/_next/") || pathname.includes(".")) {
     return NextResponse.next();
   }
 
