@@ -47,7 +47,7 @@ export interface UsageStatus {
 }
 
 /** Override with SOFT_DAILY_LIMIT in .env.local for testing (e.g. 2 = nudge after 2 queries) */
-const SOFT_DAILY_LIMIT = process.env.SOFT_DAILY_LIMIT ? parseInt(process.env.SOFT_DAILY_LIMIT, 10) : 30;
+export const SOFT_DAILY_LIMIT = process.env.SOFT_DAILY_LIMIT ? parseInt(process.env.SOFT_DAILY_LIMIT, 10) : 30;
 
 /** Check usage status for a user. */
 export async function getUsageStatus(userId: string): Promise<UsageStatus> {

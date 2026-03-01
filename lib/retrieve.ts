@@ -72,6 +72,9 @@ export async function embedText(text: string): Promise<number[]> {
     model: "text-embedding-3-small",
     input: text,
   });
+  if (!res.data?.[0]?.embedding) {
+    throw new Error("Failed to embed text: empty response from OpenAI");
+  }
   return res.data[0].embedding;
 }
 

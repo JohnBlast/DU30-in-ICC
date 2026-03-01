@@ -16,15 +16,13 @@ export async function middleware(req: NextRequest) {
   // Allow public paths
   if (pathname === "/login") {
     const token = req.cookies.get(COOKIE_NAME)?.value;
-    if (token) {
+    if (token && process.env.AUTH_SECRET && process.env.AUTH_SECRET.length >= 32) {
       try {
-        const secret = new TextEncoder().encode(process.env.AUTH_SECRET!);
-        if (secret.length >= 32) {
-          await jwtVerify(token, secret);
-          return NextResponse.redirect(new URL("/", req.nextUrl.origin));
-        }
+        const secret = new TextEncoder().encode(process.env.AUTH_SECRET);
+        await jwtVerify(token, secret);
+        return NextResponse.redirect(new URL("/", req.nextUrl.origin));
       } catch {
-        // Invalid or missing secret — continue to login
+        // Invalid token — continue to login
       }
     }
     return NextResponse.next();
@@ -44,11 +42,11 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
+    return NextResponse.next(); // No secret configured — allow (dev fallback)
+  }
   try {
-    const secret = new TextEncoder().encode(process.env.AUTH_SECRET!);
-    if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
-      return NextResponse.next(); // No secret configured — allow (dev fallback)
-    }
+    const secret = new TextEncoder().encode(process.env.AUTH_SECRET);
     await jwtVerify(token, secret);
     return NextResponse.next();
   } catch {

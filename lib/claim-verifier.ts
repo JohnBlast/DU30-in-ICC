@@ -74,7 +74,7 @@ function extractKeyTerms(sentence: string): string[] {
 /** Split list text into individual items. */
 function extractListItems(listText: string): string[] {
   const withoutMarkers = listText.replace(/\[\d+\]/g, "").trim();
-  let split = withoutMarkers.split(/\s*[,;]\s*/);
+  const split = withoutMarkers.split(/\s*[,;]\s*/);
   const result: string[] = [];
   for (const s of split) {
     const trimmed = s.trim().replace(/^\s*and\s+/i, "").trim();

@@ -9,7 +9,7 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { verifySessionToken, COOKIE_NAME } from "@/lib/auth";
 import { getSupabase } from "@/lib/db";
-import { getUsageStatus, recordQuery, estimateCostPerQuery } from "@/lib/usage";
+import { getUsageStatus, recordQuery, estimateCostPerQuery, SOFT_DAILY_LIMIT } from "@/lib/usage";
 import { chat } from "@/lib/chat";
 import { logEvent } from "@/lib/logger";
 import { validateChatInput } from "@/lib/validate-chat-input";
@@ -81,12 +81,19 @@ export async function POST(req: Request) {
         content: m.content,
       }));
     } else {
-      const { data: newConv } = await supabase
+      const { data: newConv, error: convError } = await supabase
         .from("conversations")
         .insert({ user_id: userId, title: "New conversation" })
         .select("conversation_id")
         .single();
-      convId = newConv?.conversation_id ?? null;
+      if (convError || !newConv) {
+        logEvent("chat.error", "error", {
+          error_type: "conversation_create",
+          error_message: convError?.message ?? "unknown",
+        });
+        return NextResponse.json({ error: "Failed to create conversation" }, { status: 500 });
+      }
+      convId = newConv.conversation_id;
     }
 
     const result = await chat({
@@ -100,7 +107,7 @@ export async function POST(req: Request) {
         ? `[Pasted text]\n${pastedText.slice(0, 500)}${pastedText.length > 500 ? "…" : ""}\n\n${sanitizedQuery}`
         : sanitizedQuery;
 
-      await supabase.from("messages").insert([
+      const { error: msgError } = await supabase.from("messages").insert([
         { conversation_id: convId, role: "user", content: userContent },
         {
           conversation_id: convId,
@@ -109,6 +116,9 @@ export async function POST(req: Request) {
           citations: result.citations,
         },
       ]);
+      if (msgError) {
+        logEvent("chat.error", "error", { error_type: "message_save", error_message: msgError.message });
+      }
 
       const { count } = await supabase
         .from("messages")
@@ -129,7 +139,7 @@ export async function POST(req: Request) {
     return NextResponse.json({
       ...result,
       conversationId: convId,
-      dailyLimitReached: usageStatus.dailyCount + 1 >= 30,
+      dailyLimitReached: usageStatus.dailyCount + 1 >= SOFT_DAILY_LIMIT,
     });
   } catch (err) {
     logEvent("chat.error", "error", { error_type: "route", error_message: String(err) });
