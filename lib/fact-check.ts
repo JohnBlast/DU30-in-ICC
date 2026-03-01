@@ -572,7 +572,8 @@ export async function generateFactCheckResponse(
     } else if (c.verdict === "opinion") {
       answer += `• "${c.extractedText}" — OPINION. Not a verifiable factual claim.\n`;
     } else {
-      answer += `• "${c.extractedText}" — ${v}. ICC documents state: ${c.iccSays ?? "N/A"}\n`;
+      const cite = c.citationMarker?.trim();
+      answer += `• "${c.extractedText}" — ${v}. ICC documents state: ${c.iccSays ?? "N/A"}${cite ? ` ${cite}` : ""}\n`;
     }
   }
   answer += `\nLast updated from ICC records: ${new Date().toISOString().slice(0, 10)}`;
