@@ -10,6 +10,7 @@
     "db:migrate": "tsx --env-file=.env.local scripts/db-migrate.ts",
     "db:seed-admin": "tsx --env-file=.env.local scripts/seed-admin.ts",
     "add-user": "tsx --env-file=.env.local scripts/add-user.ts",
+    "admin-reset": "tsx --env-file=.env.local scripts/admin-reset.ts",
     "cleanup-expired": "tsx --env-file=.env.local scripts/cleanup-expired-conversations.ts",
     "verify-guardrails": "tsx --env-file=.env.local scripts/verify-guardrails.ts",
     "verify-phase3": "tsx --env-file=.env.local scripts/verify-phase3.ts",

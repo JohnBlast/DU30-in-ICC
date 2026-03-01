@@ -12,10 +12,15 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [signedOut, setSignedOut] = useState(false);
 
-  // Clean trailing ? from URL (e.g. /login? → /login)
   useEffect(() => {
-    if (typeof window !== "undefined" && window.location.pathname === "/login" && window.location.search) {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("signed_out") === "1") {
+      setSignedOut(true);
+      window.history.replaceState(null, "", "/login");
+    } else if (window.location.search === "?") {
       window.history.replaceState(null, "", "/login");
     }
   }, []);
@@ -55,6 +60,11 @@ export default function LoginPage() {
         <h1 className="text-2xl font-bold text-gray-900">The Docket</h1>
         <p className="mt-1 text-sm text-gray-600">ICC Philippines Case Q&A</p>
 
+        {signedOut && (
+          <div className="mt-4 rounded bg-green-50 px-3 py-2 text-sm text-green-800" role="status">
+            You have been signed out.
+          </div>
+        )}
         <div className="mt-4 rounded bg-gray-50 px-3 py-2 text-xs text-gray-600" role="note">
           <strong className="text-gray-700">Data privacy:</strong> We store only your username and
           hashed password. Conversations auto-delete after 7 days. Your data is not used for
