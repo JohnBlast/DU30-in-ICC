@@ -54,10 +54,10 @@
 ### B1. NL Interpretation Contract
 
 - [x] `nl-interpretation.md` exists
-- [x] Semantic taxonomy covers all intent categories — 7 categories (case_facts, case_timeline, legal_concept, procedure, glossary, paste_text, out_of_scope)
+- [x] Semantic taxonomy covers all intent categories — 8 categories (case_facts, case_timeline, legal_concept, procedure, glossary, paste_text, fact_check, out_of_scope)
 - [x] Phrase → structured output mapping has concrete JSON (§3.2 — JSON for every intent)
 - [x] Field resolution rules map user concepts to exact field names (§3.1 — 9 mappings)
-- [x] Prohibited outputs listed — 15 rules (P-1 through P-15)
+- [x] Prohibited outputs listed — 23 rules (P-1 through P-24; P-15 removed in Iteration 2)
 - [x] Acceptance scenarios have Given/When/Then with exact expected behavior — 38 scenarios (NL-01 through NL-38)
 - [x] Edge cases listed with expected behavior — 10 edge cases (EC-01 through EC-10)
 - [x] Every intent category has at least one acceptance scenario
@@ -67,8 +67,8 @@
 - [x] `prompt-spec.md` exists
 - [x] Prompt structure documented — 12 sections, static vs dynamic (§2)
 - [x] Dynamic injection points defined with source and condition — 6 points (§3)
-- [x] Rules section has concrete do/don't statements — 11 hard rules (§4)
-- [x] Few-shot examples cover every intent category — 7 examples (§5)
+- [x] Rules section has concrete do/don't statements — 21 hard rules (§4, including R-17–R-21 for fact-check and multilingual)
+- [x] Few-shot examples cover every intent category — 11 examples (§5, including fact_check and Tanglish/Tagalog)
 - [x] Response contract defines exact JSON shape (§6.1)
 - [x] Error handling covers: API down, rate limit, malformed response, timeout, judge failure, RAG failure (§8)
 - [x] Version number assigned — 1.0.0 (§9)
@@ -229,6 +229,44 @@
 2. ~~Define logging standards as part of each task group implementation~~ ✓ Done — [Docket:*] prefixes, boundary logs
 
 ---
+
+## Iteration 2: Content Fact-Checker + Tanglish/Tagalog Support
+
+**Date:** 2026-03-01  
+**Reference:** prd-v2.md
+
+### Spec Sections to Verify
+
+- [ ] nl-interpretation.md §2.3.1 Step 0: Language Detection
+- [ ] nl-interpretation.md §2.3.2 Step 1: Translation
+- [ ] nl-interpretation.md §2.3.3 Step 2: Paste Auto-Detection
+- [ ] nl-interpretation.md §5.12 Fact-Check Scenarios (FC-01 through FC-08)
+- [ ] nl-interpretation.md §5.13 Tanglish/Tagalog Q&A Scenarios (TL-01 through TL-09)
+- [ ] prompt-spec.md §4b Fact-Check Rules
+- [ ] prompt-spec.md §4c Translation Prompt
+- [ ] prompt-spec.md §7b Response Language Rules
+- [ ] prompt-spec.md Examples 8-11 (fact-check + Tanglish/Tagalog)
+- [ ] prompt-spec.md fact-check judge REJECT/APPROVE criteria
+- [ ] prompt-spec.md response contract fields (fact_check, detected_language, translated_query, response_language)
+- [ ] prompt-spec.md §6.4 Copy-Text Format
+
+### Removed / Changed Items
+
+| Item | Change |
+|------|--------|
+| `non_english` intent | REMOVED — replaced by Step 0 language detection + Step 1 translation |
+| P-15 | REMOVED (obsolete) |
+| NL-30, NL-40 | UPDATED — now translate + process, not decline |
+| Tagalog word list | REPURPOSED from "decline trigger" to "language detection trigger" |
+
+### Key Design Decisions
+
+- **Language detection before injection stripping:** Step 0 runs before Step 3. Tagalog injection attempts get translated to English first, then caught by existing injection patterns.
+- **Paste default to fact_check:** When content is ambiguous (ICC doc vs social media), default to fact_check. Safer — fact-checking ICC text is harmless; explaining social media as ICC text could mislead.
+- **Translation uses GPT-4o-mini:** Same model, no new API dependency. ~$0.0005 per call.
+- **ICC terms in English:** Within Filipino responses, preserve "crimes against humanity", "Rome Statute", etc. Provide Filipino explanation in parentheses on first use.
+- **[REDACTED] never translated:** In all languages, [REDACTED] remains as-is.
+- **Robustness principle:** Never reject for language uncertainty. If ambiguous → try as English. If translation fails → fall back to original text.
 
 ---
 

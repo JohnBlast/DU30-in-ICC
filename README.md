@@ -22,6 +22,8 @@ RAG-powered Q&A app for the Duterte ICC case. Answers are grounded in official I
 | **nl-interpretation.md** | Intent categories, phrase→action mapping |
 | **data-quality.md** | CLEAN rules, validation, pipeline order |
 | **ARCHITECTURE.md** | Tech stack, schema, API contracts |
+| **prd-v2.md** | PRD Iteration 2 (optional) |
+| **Guides/** | Workflow, testing, and tooling guides |
 
 ## Scripts
 

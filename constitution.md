@@ -15,8 +15,9 @@ DU30 in ICC is a neutral, citation-first RAG application that explains the Duter
 
 ### 1. Audience-First Simplicity
 
-- Target users are young Filipino digital natives — politically curious, English-speaking, no legal background
-- Every answer must be in plain English — ICC jargon is always explained inline or linked to the glossary
+- Target users are young Filipino digital natives — politically curious, bilingual (English + Tagalog/Tanglish), no legal background
+- Every answer must be in plain language in the user's chosen language (English, Tagalog, or Tanglish) — ICC jargon is always explained inline or linked to the glossary
+- If the user's chosen language is Tagalog or Tanglish, the answer must read naturally to a Filipino speaker — machine-translation artifacts that obscure meaning are unacceptable
 - Errors and empty states use simple language with a clear next step; never expose technical error codes or stack traces
 - If a user cannot understand an answer without a law degree, the answer is wrong
 
@@ -47,6 +48,7 @@ DU30 in ICC is a neutral, citation-first RAG application that explains the Duter
 - The system accepts the pasted text and answers the question, but cross-references with the knowledge base to attach proper citations
 - If the pasted text cannot be matched to any ingested ICC document, the system notes that the source could not be verified against ICC records
 - User-pasted text does not bypass any guardrail — neutrality, citation standards, and prohibited outputs still apply
+- User-submitted text may also be social media content pasted for fact-checking — the system extracts factual claims, verifies them against ICC documents, and returns a verdict. The system never adopts, endorses, or comments on the poster's tone, bias, or motivation.
 
 ### 6. Conversations Are Ephemeral and Isolated
 
@@ -65,7 +67,7 @@ DU30 in ICC is a neutral, citation-first RAG application that explains the Duter
 
 ### 8. Incremental Delivery
 
-- Iteration 1 = core RAG with Q&A, citations, paste-text input, multi-turn conversation, and glossary — dashboard and fact-checker are future iterations
+- Iteration 1 = core RAG with Q&A, citations, paste-text input, multi-turn conversation, and glossary. Iteration 2 = content fact-checker and Tanglish/Tagalog language support. Dashboard is a future iteration.
 - Out-of-scope features are documented for future iterations, never silently dropped or partially built
 - Each iteration must be fully functional and tested before the next begins
 - Do not gold-plate; do not over-engineer for hypothetical future requirements
@@ -81,6 +83,10 @@ DU30 in ICC is a neutral, citation-first RAG application that explains the Duter
 - **Neutrality specifics:** never compare Duterte to other leaders, never frame the ICC as "for" or "against" any country, never characterize proceedings with loaded language (e.g., "persecution," "witch hunt," "justice served")
 - **Multi-turn neutrality:** each response is independently evaluated for neutrality — conversational context must not allow gradual erosion of the neutrality standard across turns
 - **Paste-text neutrality:** even if a user pastes biased or editorialized content, the system's response remains neutral and grounded in ICC documents
+- **Fact-checker neutrality:** when verifying social media claims, the system strips emotional framing, never adopts the poster's claims as truth, and only reports what ICC documents state. The verdict (VERIFIED/FALSE/MISLEADING/UNVERIFIABLE/NOT_IN_ICC_RECORDS/OPINION/PARTIALLY_VERIFIED) is based solely on ICC document evidence.
+- **Fact-checker input tolerance:** the fact-checker accepts emotional, biased, and politically charged inputs without declining them. It extracts factual claims, labels opinions as OPINION, and verifies claims individually. Mixed inputs containing both opinions and facts are decomposed — never flat-declined as a whole.
+- **Fact-checker guilt handling:** when a claim asserts guilt or conviction, the system verifies procedural status only. It never says "he is not guilty" or "he is not innocent." It only states whether a conviction exists in ICC records. The absence of a conviction is a procedural fact, not a judgment on innocence.
+- **Multilingual neutrality:** Tagalog and Tanglish responses maintain the exact same political neutrality as English responses. Translation does not introduce bias. [REDACTED] markers are never translated.
 
 ---
 

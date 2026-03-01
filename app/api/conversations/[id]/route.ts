@@ -70,6 +70,13 @@ export async function PATCH(
   if (typeof body.title === "string" && body.title.trim()) {
     updates.title = body.title.trim().slice(0, 200);
   }
+  if (body.response_language !== undefined) {
+    const validLanguages = ["en", "tl", "taglish"];
+    if (!validLanguages.includes(body.response_language)) {
+      return NextResponse.json({ error: "Invalid response_language" }, { status: 400 });
+    }
+    updates.response_language = body.response_language;
+  }
 
   if (Object.keys(updates).length === 0) {
     return NextResponse.json({ error: "No valid updates" }, { status: 400 });
@@ -80,7 +87,7 @@ export async function PATCH(
     .update(updates)
     .eq("conversation_id", id)
     .eq("user_id", userId)
-    .select("conversation_id, title, is_bookmarked")
+    .select("conversation_id, title, is_bookmarked, response_language")
     .single();
 
   if (error) {

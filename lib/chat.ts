@@ -9,9 +9,20 @@ import { getOpenAIClient } from "./openai-client";
 import { classifyIntent } from "./intent-classifier";
 import { intentToRagIndexes } from "./intent";
 import { retrieve, type RetrievalChunk } from "./retrieve";
-import { buildSystemPrompt, JUDGE_SYSTEM_PROMPT, buildJudgeUserMessage } from "./prompts";
+import { buildSystemPrompt, buildJudgeUserMessage, JUDGE_SYSTEM_PROMPT } from "./prompts";
 import { verifyEnumeratedClaims } from "./claim-verifier";
 import { logEvent } from "./logger";
+import { detectLanguage } from "./language-detect";
+import { translateToEnglish } from "./translate";
+import { detectPasteType } from "./paste-detect";
+import {
+  extractClaims,
+  generateFactCheckResponse,
+  formatCopyText,
+  type ClaimVerdict,
+  type FactCheckResult,
+  type VerifiedClaim,
+} from "./fact-check";
 
 const MAX_ANSWER_TOKENS = 1024;
 const MAX_JUDGE_TOKENS = 256;
@@ -36,6 +47,10 @@ export interface ChatResponse {
   retrievalConfidence?: "high" | "medium" | "low";
   claimsVerified?: boolean;
   claimsStripped?: number;
+  factCheck?: FactCheckResult;
+  detectedLanguage?: string;
+  translatedQuery?: string;
+  responseLanguage?: string;
 }
 
 function getSupabase() {
@@ -218,6 +233,7 @@ export interface ChatOptions {
   pastedText?: string;
   conversationId?: string;
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
+  responseLanguage?: "en" | "tl" | "taglish";
 }
 
 /** Multi-intent: "Tell me about Count 2. Also, was the drug war justified?" (nl-interpretation §5.9 NL-47) */
@@ -249,25 +265,59 @@ function splitMultiIntent(query: string): { validQuery: string; hasInvalidPart: 
 }
 
 export async function chat(opts: ChatOptions): Promise<ChatResponse> {
-  const { query, pastedText, conversationHistory = [] } = opts;
+  const { query, pastedText, conversationHistory = [], responseLanguage = "en" } = opts;
 
   // Multi-intent: answer valid part, append flat decline for invalid part (Task 10.14)
   const multiIntent = splitMultiIntent(query);
-  const effectiveQuery = multiIntent?.validQuery ?? query;
+  let effectiveQuery = multiIntent?.validQuery ?? query;
+  let originalQuery: string | undefined;
 
-  const { intent, isRedaction } = await classifyIntent(effectiveQuery, !!pastedText);
+  // Step 0: Language Detection
+  const langResult = detectLanguage(effectiveQuery);
 
-  if (intent === "non_english") {
+  let effectivePastedText = pastedText;
+
+  // Step 1: Translation (if Filipino detected)
+  if (langResult.language === "tl" || langResult.language === "taglish") {
+    const translation = await translateToEnglish(effectiveQuery);
+    if (translation.success) {
+      effectiveQuery = translation.translatedText;
+      originalQuery = opts.query;
+    }
+    // Also translate pastedText if present and in Filipino
+    if (pastedText) {
+      const pastedLang = detectLanguage(pastedText);
+      if (pastedLang.language === "tl" || pastedLang.language === "taglish") {
+        const pastedTranslation = await translateToEnglish(pastedText);
+        if (pastedTranslation.success) {
+          effectivePastedText = pastedTranslation.translatedText;
+        }
+      }
+    }
+  }
+
+  // Step 2: Paste Auto-Detection (if pasted text exists)
+  let pasteType: "icc_document" | "social_media" | undefined;
+  if (effectivePastedText) {
+    const pasteResult = await detectPasteType(effectivePastedText, effectiveQuery);
+    pasteType = pasteResult.pasteType;
+  }
+
+  // "other" language decline
+  if (langResult.language === "other") {
     const kbDate = await getKnowledgeBaseLastUpdated();
     return {
       answer:
-        "The Docket currently supports English only. Please ask your question in English.",
+        "The Docket currently supports English, Tagalog, and Tanglish. Please rephrase your question in one of these languages.",
       citations: [],
       warning: null,
       verified: true,
       knowledge_base_last_updated: kbDate,
+      responseLanguage,
     };
   }
+
+  const { intent, isRedaction } = await classifyIntent(effectiveQuery, !!effectivePastedText, pasteType);
 
   if (intent === "out_of_scope") {
     const kbDate = await getKnowledgeBaseLastUpdated();
@@ -280,17 +330,199 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
       warning: null,
       verified: true,
       knowledge_base_last_updated: kbDate,
+      responseLanguage,
     };
   }
 
+  // Fact-check flow: extract claims FIRST, then retrieve per-claim
+  if (intent === "fact_check" && effectivePastedText) {
+    const trimmedPaste = effectivePastedText.trim();
+    if (!trimmedPaste || trimmedPaste.length < 10) {
+      const kbDate = await getKnowledgeBaseLastUpdated();
+      return {
+        answer:
+          "Please paste the content you want verified in the box above (click + Paste), then ask your question. The fact-checker needs the actual text to extract and verify claims.",
+        citations: [],
+        warning: null,
+        verified: true,
+        knowledge_base_last_updated: kbDate,
+        responseLanguage,
+      };
+    }
+
+    // Bug 3 fix: Check pasted text for redaction signals before claim extraction
+    const redactionInPaste = /\[REDACTED\]|\bredacted\b|\bconfidential\s+witness\b|\bunnamed\b.*\b(source|witness|person|individual)\b|\bsealed\b.*\b(evidence|document|record)\b|\bde-?anonymize\b/i.test(trimmedPaste);
+    if (redactionInPaste) {
+      const kbDate = await getKnowledgeBaseLastUpdated();
+      return {
+        answer:
+          "This content references redacted material in ICC records. The Docket cannot investigate, speculate on, or attempt to identify redacted content. Redactions are maintained to protect witnesses and the integrity of proceedings.",
+        citations: [],
+        warning: null,
+        verified: true,
+        knowledge_base_last_updated: kbDate,
+        responseLanguage,
+      };
+    }
+
+    const claims = await extractClaims(effectivePastedText);
+    const factualClaims = claims.filter((c) => c.claimType === "factual_claim");
+    const opinionClaims = claims.filter((c) => c.claimType === "opinion");
+    const oosClaims = claims.filter((c) => c.claimType === "out_of_scope");
+
+    if (claims.length === 0) {
+      const kbDate = await getKnowledgeBaseLastUpdated();
+      return {
+        answer:
+          "This content appears to contain no verifiable factual claims about the ICC case. The Docket extracts and verifies factual statements against ICC records.",
+        citations: [],
+        warning: null,
+        verified: true,
+        knowledge_base_last_updated: kbDate,
+        responseLanguage,
+      };
+    }
+
+    // Pure opinion/out-of-scope: label, don't decline, no retrieval needed
+    if (factualClaims.length === 0) {
+      const kbDate = await getKnowledgeBaseLastUpdated();
+      const opinionVerified: VerifiedClaim[] = opinionClaims.map((c) => ({
+        extractedText: c.extractedText,
+        originalText: c.originalText,
+        verdict: "opinion" as ClaimVerdict,
+        iccSays: null,
+        citationMarker: "",
+        confidence: "high" as const,
+        evidenceType: "opinion",
+      }));
+      const oosVerified: VerifiedClaim[] = oosClaims.map((c) => ({
+        extractedText: c.extractedText,
+        originalText: c.originalText,
+        verdict: "opinion" as ClaimVerdict,
+        iccSays: null,
+        citationMarker: "",
+        confidence: "high" as const,
+        evidenceType: "out_of_scope",
+      }));
+      const allClaims = [...opinionVerified, ...oosVerified];
+      const factCheck: FactCheckResult = {
+        overallVerdict: "opinion" as ClaimVerdict,
+        pastedContentPreview: effectivePastedText.slice(0, 100) + (effectivePastedText.length > 100 ? "…" : ""),
+        detectedLanguage: langResult.language,
+        claims: allClaims,
+        copyText: "",
+        mode: "fact_check",
+        inputPreview: effectivePastedText.slice(0, 100),
+      };
+      factCheck.copyText = formatCopyText(factCheck);
+      return {
+        answer:
+          "OPINION\n\nThis content contains opinions rather than verifiable factual claims about the ICC case. No factual claims were found to verify against ICC records.\n\nThe Docket verifies factual claims about the Duterte ICC case against official ICC documents.",
+        citations: [],
+        warning: null,
+        verified: true,
+        knowledge_base_last_updated: kbDate,
+        factCheck,
+        detectedLanguage: langResult.language,
+        responseLanguage,
+      };
+    }
+
+    // Bug 1+2 fix: Retrieve using extracted factual claims as search queries, not raw pasted text
+    const ragIndexes = intentToRagIndexes(intent, effectiveQuery);
+    const claimSearchQueries = factualClaims.map((c) => c.extractedText);
+    const combinedClaimQuery = claimSearchQueries.join(". ");
+
+    const retrieveResult = await retrieve({
+      query: combinedClaimQuery,
+      ragIndexes,
+      intent,
+    });
+    const { chunks, retrievalConfidence } = retrieveResult;
+
+    if (chunks.length === 0) {
+      logEvent("chat.flat_decline", "warn", { intent: "fact_check", reason: "chunks=0" });
+      const kbDate = await getKnowledgeBaseLastUpdated();
+      return {
+        answer:
+          "We couldn't find relevant ICC documents to verify these claims. The Docket can only fact-check against ingested ICC records. This topic may not be covered in our knowledge base yet.",
+        citations: [],
+        warning: null,
+        verified: true,
+        knowledge_base_last_updated: kbDate,
+        responseLanguage,
+      };
+    }
+
+    const { answer, factCheck } = await generateFactCheckResponse(
+      claims,
+      chunks,
+      effectivePastedText.slice(0, 100),
+      langResult.language,
+      responseLanguage
+    );
+
+    const openai = getOpenAIClient();
+    const judgeDisabled = process.env.DISABLE_JUDGE === "true";
+    if (!judgeDisabled) {
+      try {
+        const judgeResult = await judgeAnswer(
+          answer,
+          chunks,
+          openai,
+          undefined,
+          sanitizeHistory(conversationHistory.slice(-3))
+        );
+        if (judgeResult.verdict === "REJECT") {
+          const kbDate = await getKnowledgeBaseLastUpdated();
+          const noDocsReject =
+            chunks.length === 0 ||
+            /no (icc )?documents|absence of.*documents|documents? (were )?retrieved/i.test(
+              judgeResult.reason ?? ""
+            );
+          const factCheckRejectMessage = noDocsReject
+            ? "We couldn't find relevant ICC documents to verify these claims. The Docket can only fact-check against ingested ICC records. This topic may not be covered in our knowledge base yet."
+            : "We couldn't verify this fact-check against our ICC records. The verdict reached may not be sufficiently supported by the retrieved documents. Try content with claims that relate more directly to the ICC case documents we have.";
+          return {
+            answer: factCheckRejectMessage,
+            citations: [],
+            warning: null,
+            verified: false,
+            knowledge_base_last_updated: kbDate,
+            responseLanguage,
+          };
+        }
+      } catch (err) {
+        logEvent("chat.error", "error", { error_type: "judge_api", error_message: String(err) });
+        throw new Error("Judge API unavailable");
+      }
+    }
+
+    const citations = extractCitations(answer, chunks);
+    const validatedCitations = validateCitationIntegrity(citations, answer, chunks);
+    const kbDate = await getKnowledgeBaseLastUpdated();
+
+    return {
+      answer,
+      citations: validatedCitations,
+      warning: null,
+      verified: true,
+      knowledge_base_last_updated: kbDate,
+      factCheck: { ...factCheck, copyText: formatCopyText(factCheck) },
+      detectedLanguage: langResult.language,
+      translatedQuery: originalQuery ? effectiveQuery : undefined,
+      responseLanguage,
+    };
+  }
+
+  // Normal Q&A flow: retrieve using query (or pasted text for paste_text intent)
   const ragIndexes = intentToRagIndexes(intent, effectiveQuery);
   const retrieveResult = await retrieve({
     query: effectiveQuery,
-    pastedText,
+    pastedText: effectivePastedText,
     ragIndexes,
     intent,
   });
-
   const { chunks, pasteTextMatched, retrievalConfidence } = retrieveResult;
 
   if (chunks.length === 0) {
@@ -317,19 +549,24 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     chunks,
     queryType: intent,
     query: effectiveQuery,
-    pastedText,
+    pastedText: effectivePastedText,
     pasteTextMatched,
     conversationHistory: sanitizeHistory(conversationHistory.slice(-3)),
     knowledgeBaseLastUpdated: kbDate,
     isAbsenceQuery,
+    responseLanguage,
+    originalQuery,
   });
 
   const openai = getOpenAIClient();
+  const userMessageContent = effectivePastedText
+    ? `[Pasted text]\n${effectivePastedText}\n\n${effectiveQuery}`
+    : effectiveQuery;
   const res = await openai.chat.completions.create({
     model: "gpt-4o-mini",
     messages: [
       { role: "system", content: systemPrompt },
-      { role: "user", content: effectiveQuery },
+      { role: "user", content: userMessageContent },
     ],
     max_tokens: MAX_ANSWER_TOKENS,
   });
@@ -390,7 +627,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     chunks,
     pasteTextMatched,
     kbDate,
-    !!pastedText,
+    !!effectivePastedText,
     retrievalConfidence,
     claimResult.hadEnumerations ? claimResult.strippedClaims.length === 0 : undefined,
     claimResult.strippedClaims.length > 0 ? claimResult.strippedClaims.length : undefined
@@ -403,5 +640,10 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
       "\n\nThe second part of your question asks for opinions or information outside ICC case documents, so we can't answer it from the records.";
   }
 
-  return parsed;
+  return {
+    ...parsed,
+    detectedLanguage: langResult.language !== "en" ? langResult.language : undefined,
+    translatedQuery: originalQuery,
+    responseLanguage,
+  };
 }

@@ -31,12 +31,18 @@ export async function POST(req: Request) {
     const { query, pastedText, conversationId } = body;
 
     if (!query || typeof query !== "string") {
-      return NextResponse.json({ error: "Missing query" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Missing query", answer: "Please provide a question to ask." },
+        { status: 400 }
+      );
     }
 
     const validation = validateChatInput(query, pastedText);
     if (!validation.valid) {
-      return NextResponse.json({ error: validation.error }, { status: 400 });
+      return NextResponse.json(
+        { error: validation.error, answer: validation.error ?? "Invalid input. Please try again." },
+        { status: 400 }
+      );
     }
     const sanitizedQuery = validation.sanitizedQuery!;
 
@@ -61,15 +67,40 @@ export async function POST(req: Request) {
 
     // Load conversation history or create new conversation
     let conversationHistory: Array<{ role: "user" | "assistant"; content: string }> = [];
+    let responseLanguage: "en" | "tl" | "taglish" = "en";
     if (convId) {
-      const { data: conv } = await supabase
+      let conv: { conversation_id: string; response_language?: string } | null = null;
+      const { data: convData, error: convError } = await supabase
         .from("conversations")
-        .select("conversation_id")
+        .select("conversation_id, response_language")
         .eq("conversation_id", convId)
         .eq("user_id", userId)
         .single();
+
+      if (convError && /response_language|column/i.test(String(convError.message))) {
+        const fallback = await supabase
+          .from("conversations")
+          .select("conversation_id")
+          .eq("conversation_id", convId)
+          .eq("user_id", userId)
+          .single();
+        conv = fallback.data;
+      } else {
+        conv = convData;
+      }
+
       if (!conv) {
-        return NextResponse.json({ error: "Conversation not found or access denied" }, { status: 404 });
+        return NextResponse.json(
+          {
+            error: "Conversation not found or access denied",
+            answer: "This conversation was not found or you don't have access to it. Please start a new conversation.",
+          },
+          { status: 404 }
+        );
+      }
+      const validLanguages = ["en", "tl", "taglish"];
+      if (conv.response_language && validLanguages.includes(conv.response_language)) {
+        responseLanguage = conv.response_language as "en" | "tl" | "taglish";
       }
       const { data: messages } = await supabase
         .from("messages")
@@ -96,16 +127,27 @@ export async function POST(req: Request) {
       convId = newConv.conversation_id;
     }
 
+    const bodyResponseLanguage = body.responseLanguage;
+    if (typeof bodyResponseLanguage === "string" && ["en", "tl", "taglish"].includes(bodyResponseLanguage)) {
+      responseLanguage = bodyResponseLanguage as "en" | "tl" | "taglish";
+    }
+
     const result = await chat({
       query: sanitizedQuery,
       pastedText: typeof pastedText === "string" ? pastedText.trim() : undefined,
       conversationHistory,
+      responseLanguage,
     });
 
     if (convId) {
       const userContent = pastedText
-        ? `[Pasted text]\n${pastedText.slice(0, 500)}${pastedText.length > 500 ? "…" : ""}\n\n${sanitizedQuery}`
+        ? `[Pasted text]\n${pastedText}\n\n${sanitizedQuery}`
         : sanitizedQuery;
+
+      const assistantCitations =
+        result.factCheck
+          ? { citations: result.citations, factCheck: result.factCheck }
+          : (result.citations ?? []);
 
       const { error: msgError } = await supabase.from("messages").insert([
         { conversation_id: convId, role: "user", content: userContent },
@@ -113,7 +155,7 @@ export async function POST(req: Request) {
           conversation_id: convId,
           role: "assistant",
           content: result.answer,
-          citations: result.citations,
+          citations: assistantCitations,
         },
       ]);
       if (msgError) {

@@ -113,7 +113,11 @@ These never run simultaneously against the same data. Partially ingested documen
 │   ├── rag/
 │   │   ├── retrieval.ts          # Hybrid search: vector + BM25 + RRF + FlashRank
 │   │   ├── embeddings.ts         # OpenAI embedding calls
-│   │   └── intent.ts             # Intent classification (7 categories)
+│   │   └── intent.ts             # Intent classification (8 categories)
+│   ├── language-detect.ts        # Step 0: Language detection (en/tl/taglish/other)
+│   ├── translate.ts              # Step 1: Filipino → English translation (GPT-4o-mini)
+│   ├── paste-detect.ts           # Step 2: ICC document vs social media classification
+│   ├── fact-check.ts             # Fact-check claim extraction, verification, verdict logic
 │   ├── llm/
 │   │   ├── generate.ts           # LLM answer generation with system prompt
 │   │   ├── judge.ts              # LLM-as-Judge verification
@@ -396,8 +400,8 @@ User types question
          │
          ▼
 ┌─────────────────┐
-│ Intent classify  │  gpt-4o-mini classifies into 7 categories
-│ (lib/rag/intent) │
+│ 6-Step Pipeline │  Step 0: Language detect → Step 1: Translate (if Filipino) → Step 2: Paste detect (if pasted)
+│ (lib/)           │  Step 3: Hard gates → Step 4: Regex → Step 5: LLM classify → Step 6: Cross-validate
 └────────┬─────────┘
          │
          ├── out_of_scope → return flat decline immediately (no RAG, no LLM)
@@ -428,7 +432,7 @@ User types question
          ▼
 ┌─────────────────┐
 │  LLM Generation  │  gpt-4o-mini
-│ (lib/llm/        │
+│ (lib/llm/        │  Also used for: Tanglish/Tagalog→English translation, paste content auto-detection (LLM fallback)
 │  generate)       │
 │                  │
 │  Inputs:         │
@@ -440,11 +444,20 @@ User types question
 │  - Conversation  │  (last 5 turns)
 │    history       │
 │  - User query    │
+│  - response_     │
+│    language      │  (en | tl | taglish)
 │                  │
 │  Output:         │
 │  - Answer text   │
 │  - Citations     │  (parsed from inline [N] markers)
 │  - Warning       │  (if paste_text unmatched)
+└────────┬─────────┘
+         │
+         ▼
+┌─────────────────┐
+│ Claim Grounding  │  verifyEnumeratedClaims() — strip ungrounded list items
+│ (lib/claim-      │
+│  verifier)       │
 └────────┬─────────┘
          │
          ▼
@@ -544,7 +557,7 @@ All endpoints require authentication (cookie/JWT) except `POST /api/auth/login`.
 | `GET` | `/api/conversations` | List user's conversations | Yes | PRD §10 |
 | `GET` | `/api/conversations/:id/messages` | Get messages for a conversation | Yes | PRD §10 |
 | `DELETE` | `/api/conversations/:id` | Delete a conversation | Yes | PRD §2 |
-| `PATCH` | `/api/conversations/:id` | Update conversation (bookmark, title) | Yes | PRD §2 |
+| `PATCH` | `/api/conversations/:id` | Update conversation (bookmark, title, response_language) | Yes | PRD §2, prd-v2 §10. Accepts `response_language` (en \| tl \| taglish) |
 
 ### 7.2 Request/Response Shapes
 

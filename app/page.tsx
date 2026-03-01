@@ -6,9 +6,11 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { ChatMessage, type Citation } from "@/components/ChatMessage";
+import { ChatMessage, type Citation, type FactCheckResult } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
+
+type ResponseLanguage = "en" | "tl" | "taglish";
 
 interface Message {
   message_id: string;
@@ -18,6 +20,7 @@ interface Message {
   warning?: string | null;
   knowledge_base_last_updated?: string;
   verified?: boolean;
+  factCheck?: FactCheckResult | null;
 }
 
 export default function Home() {
@@ -28,6 +31,7 @@ export default function Home() {
   const [resetDate, setResetDate] = useState<string>("");
   const [dailyLimitNudge, setDailyLimitNudge] = useState(false);
   const [conversationExpired, setConversationExpired] = useState(false);
+  const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>("en");
   const sidebarRef = useRef<{ refetch: () => Promise<void> }>(null);
   const skipNextLoadRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -53,7 +57,32 @@ export default function Home() {
       return;
     }
     const data = await res.json();
-    setMessages(data.messages ?? []);
+    const rawMessages = data.messages ?? [];
+    const parsed: Message[] = rawMessages.map((m: { message_id: string; role: string; content: string; citations?: unknown }) => {
+      const citationsRaw = m.citations;
+      let citations: Citation[] = [];
+      let factCheck: FactCheckResult | undefined;
+      if (Array.isArray(citationsRaw)) {
+        citations = citationsRaw as Citation[];
+      } else if (citationsRaw && typeof citationsRaw === "object" && "citations" in citationsRaw) {
+        citations = (citationsRaw.citations ?? []) as Citation[];
+        factCheck = (citationsRaw as { factCheck?: FactCheckResult }).factCheck;
+      }
+      return {
+        message_id: m.message_id,
+        role: m.role as "user" | "assistant",
+        content: m.content,
+        citations,
+        factCheck,
+      };
+    });
+    setMessages(parsed);
+    const validLanguages = ["en", "tl", "taglish"];
+    if (data.response_language && validLanguages.includes(data.response_language)) {
+      setResponseLanguage(data.response_language as ResponseLanguage);
+    } else {
+      setResponseLanguage("en");
+    }
   }, []);
 
   useEffect(() => {
@@ -81,6 +110,7 @@ export default function Home() {
     setConversationId(null);
     setMessages([]);
     setConversationExpired(false);
+    setResponseLanguage("en");
   }
 
   function handleSelectConversation(id: string) {
@@ -88,7 +118,7 @@ export default function Home() {
   }
 
   async function handleSend(query: string, pastedText?: string) {
-    const userContent = pastedText ? `[Pasted text]\n${pastedText.slice(0, 200)}…\n\n${query}` : query;
+    const userContent = pastedText ? `[Pasted text]\n${pastedText}\n\n${query}` : query;
     const userMsgId = "u-" + Date.now();
 
     setMessages((prev) => [
@@ -106,6 +136,7 @@ export default function Home() {
           query,
           pastedText: pastedText || undefined,
           conversationId: conversationId || undefined,
+          responseLanguage,
         }),
       });
 
@@ -139,12 +170,21 @@ export default function Home() {
           warning: data.warning ?? null,
           knowledge_base_last_updated: data.knowledge_base_last_updated,
           verified: data.verified,
+          factCheck: data.factCheck ?? null,
         },
       ]);
 
       if (data.conversationId && !conversationId) {
         skipNextLoadRef.current = true;
         setConversationId(data.conversationId);
+        if (responseLanguage !== "en") {
+          await fetch(`/api/conversations/${data.conversationId}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            credentials: "same-origin",
+            body: JSON.stringify({ response_language: responseLanguage }),
+          });
+        }
       }
       await sidebarRef.current?.refetch();
     } catch {
@@ -183,6 +223,29 @@ export default function Home() {
             >
               Glossary
             </a>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">Response:</span>
+              <select
+                value={responseLanguage}
+                onChange={async (e) => {
+                  const lang = e.target.value as ResponseLanguage;
+                  setResponseLanguage(lang);
+                  if (conversationId) {
+                    await fetch(`/api/conversations/${conversationId}`, {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      credentials: "same-origin",
+                      body: JSON.stringify({ response_language: lang }),
+                    });
+                  }
+                }}
+                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+              >
+                <option value="en">English</option>
+                <option value="tl">Tagalog</option>
+                <option value="taglish">Tanglish</option>
+              </select>
+            </div>
           </div>
           <form action="/api/auth/logout" method="POST">
             <button
@@ -231,6 +294,7 @@ export default function Home() {
                   citations={m.citations}
                   warning={m.warning}
                   knowledge_base_last_updated={m.knowledge_base_last_updated}
+                  factCheck={m.factCheck}
                 />
               ))}
               {loading && (

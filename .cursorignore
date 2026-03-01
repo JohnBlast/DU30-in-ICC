@@ -1,0 +1,16 @@
+# Build outputs
+.next/
+out/
+node_modules/
+
+# TypeScript incremental
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
+# Ephemeral / archive
+prompts/archive/
+
+# Secrets
+.env
+.env.*
+!.env.example

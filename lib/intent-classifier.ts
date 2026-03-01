@@ -1,9 +1,11 @@
 /**
- * Intent classification: 4-layer architecture (nl-interpretation.md §2.3).
+ * Intent classification: 6-step pipeline Steps 3-6 (nl-interpretation.md §2.3).
+ * Steps 0-2 (language detect, translate, paste detect) run before this.
  * Deterministic-first, LLM-second.
  */
 
 import type { IntentCategory } from "./intent";
+import type { PasteType } from "./paste-detect";
 import { getOpenAIClient } from "./openai-client";
 import { logEvent } from "./logger";
 
@@ -14,15 +16,15 @@ const VALID_INTENTS: IntentCategory[] = [
   "procedure",
   "glossary",
   "paste_text",
-  "non_english",
+  "fact_check",
   "out_of_scope",
 ];
 
 const INTENT_PROMPT = `You classify user questions about the Duterte ICC case.
 
-Respond with exactly one of these words: case_facts, case_timeline, legal_concept, procedure, glossary, non_english, out_of_scope
+Respond with exactly one of these words: case_facts, case_timeline, legal_concept, procedure, glossary, paste_text, fact_check, out_of_scope
 
-- non_english: Query is primarily in Tagalog, Filipino, or another non-English language (e.g. "Ano yung charges?", "Sino ang akusado?")
+- fact_check: User pasted social media content for claim verification (not ICC document text)
 - case_facts: "What is Duterte charged with?", "Who are the victims?", "How many counts?", "What are the evidences against Duterte?", "Who are the judges?", "Is Du30 fit to stand trial?", "Who pays for Duterte's defence?", "Where is Duterte detained?", "Did Duterte surrender or was he arrested?", "measures to facilitate attendance"
 - case_timeline: "When did the ICC open the investigation?", "What's the timeline?"
 - legal_concept: "What is Article 7?", "What are crimes against humanity?"
@@ -51,12 +53,16 @@ function stripInjectionPrefix(query: string): string {
 }
 
 // --- Layer 1: Deterministic gates ---
+// When pasteType is provided, Step 2 already decided — bypass LLM
 function layer1Deterministic(
   query: string,
   hasPastedText: boolean,
-  cleanedQuery: string
+  cleanedQuery: string,
+  pasteType?: PasteType
 ): IntentCategory | null {
-  if (hasPastedText) return "paste_text";
+  if (pasteType === "social_media") return "fact_check";
+  if (pasteType === "icc_document") return "paste_text";
+  if (hasPastedText && !pasteType) return "paste_text"; // Legacy: no paste detection yet
   if (!cleanedQuery || /^\s*$/.test(cleanedQuery)) return "out_of_scope";
   if (/\[REDACTED\]/i.test(cleanedQuery)) return "out_of_scope";
   // Prompt injection: if full query is an injection attempt with no real question left, out_of_scope
@@ -65,15 +71,10 @@ function layer1Deterministic(
 }
 
 // --- Layer 2: Regex patterns (nl-interpretation.md §2.3, §4.1) ---
-
-const TAGALOG_WORDS = /\b(ang|yung|kay|ba|siya|niya|pero|kasi|sino|ano|paano|bakit|talaga|naman|daw|raw|mo)\b/gi;
+// Note: Tagalog → non_english removed; language detection is Step 0, translation is Step 1.
 
 function layer2Regex(cleanedQuery: string): { intent: IntentCategory; confidence: "high" | "low" } | null {
   const q = cleanedQuery;
-
-  // Tagalog function words (2+ matches) → non_english (§2.2)
-  const tagalogMatches = q.match(TAGALOG_WORDS);
-  if (tagalogMatches && tagalogMatches.length >= 2) return { intent: "non_english", confidence: "high" };
 
   // Redaction signals (§4.1)
   if (/\bredacted\b/i.test(q)) return { intent: "out_of_scope", confidence: "high" };
@@ -149,7 +150,7 @@ async function layer3LLM(cleanedQuery: string): Promise<string | null> {
   if (raw.includes("legal concept")) return "legal_concept";
   if (raw.includes("procedure")) return "procedure";
   if (raw.includes("glossary")) return "glossary";
-  if (raw.includes("non english") || raw.includes("non_english")) return "non_english";
+  if (raw.includes("fact check") || raw.includes("fact_check")) return "fact_check";
   return found ?? "out_of_scope";
 }
 
@@ -175,17 +176,19 @@ export interface ClassificationResult {
 }
 
 /**
- * Classify user query into intent category. 4-layer architecture.
+ * Classify user query into intent category. Steps 3-6 of 6-step pipeline.
+ * When pasteType is provided (from Step 2), routes directly to fact_check or paste_text.
  */
 export async function classifyIntent(
   query: string,
-  hasPastedText: boolean
+  hasPastedText: boolean,
+  pasteType?: PasteType
 ): Promise<ClassificationResult> {
   // Strip injection prefix before any classification (Task 10.11)
   const cleanedQuery = stripInjectionPrefix(query);
 
-  // Layer 1: Deterministic gates
-  const layer1 = layer1Deterministic(query, hasPastedText, cleanedQuery);
+  // Layer 1: Deterministic gates (includes pasteType from Step 2)
+  const layer1 = layer1Deterministic(query, hasPastedText, cleanedQuery, pasteType);
   if (layer1) {
     const isRedaction = layer1 === "out_of_scope" && isRedactionQuery(cleanedQuery);
     logEvent("classifier.intent", "info", { layer: 1, intent: layer1 });

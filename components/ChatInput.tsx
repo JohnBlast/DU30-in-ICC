@@ -23,9 +23,11 @@ export function ChatInput({ onSend, disabled, capExceeded, resetDate }: ChatInpu
     const q = query.trim();
     if (!q || disabled) return;
 
-    onSend(q, pastedText.trim() || undefined);
+    const toPaste = pastedText.trim() || undefined;
+    onSend(q, toPaste);
     setQuery("");
     setPastedText("");
+    setShowPaste(false);
   }
 
   if (capExceeded) {
@@ -44,12 +46,12 @@ export function ChatInput({ onSend, disabled, capExceeded, resetDate }: ChatInpu
       {showPaste && (
         <div className="mb-3">
           <label className="mb-1 block text-xs font-medium text-gray-600">
-            Pasted ICC document text (optional)
+            Paste ICC document or social media content (optional)
           </label>
           <textarea
             value={pastedText}
             onChange={(e) => setPastedText(e.target.value)}
-            placeholder="Paste text from an ICC document to verify and ask about it..."
+            placeholder="Paste ICC document text or a social media post to verify. Then ask e.g. &quot;Is this accurate?&quot; or &quot;Fact-check this&quot;"
             rows={3}
             className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
             disabled={disabled}
@@ -70,7 +72,7 @@ export function ChatInput({ onSend, disabled, capExceeded, resetDate }: ChatInpu
           type="button"
           onClick={() => setShowPaste(!showPaste)}
           className="rounded-md border border-gray-300 px-3 py-2.5 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-50"
-          title={showPaste ? "Hide paste area" : "Add pasted text"}
+          title={showPaste ? "Hide paste area" : "Paste ICC document or social media to verify"}
         >
           {showPaste ? "−" : "+"} Paste
         </button>

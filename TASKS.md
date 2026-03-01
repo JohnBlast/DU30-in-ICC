@@ -2,7 +2,7 @@
 
 > **What this is:** Ordered, verifiable implementation tasks for Iteration 1. Each task is small enough to verify individually, ordered by dependency, and references the spec section it implements.
 >
-> **Rule:** Never start Task N+1 until Task N is verified. See `9 - testing-guide.md`.
+> **Rule:** Never start Task N+1 until Task N is verified. See `Guides/9 - testing-guide.md`.
 
 ---
 
@@ -288,7 +288,7 @@ These are free open-source libraries installed during Task Group 1:
 | 10.9 | Refactor intent classifier to deterministic-first architecture (Layer 1–4 per nl-interpretation.md §2.3) | nl-interpretation.md §2.3 | Regex patterns fire before LLM call; LLM only called for ambiguous queries |
 | 10.10 | Implement expanded redacted-content detection: regex for "confidential witness", "unnamed source", "sealed evidence", "de-anonymize" per §4.1 | nl-interpretation.md §4.1 | All 8 redaction signals produce out_of_scope without LLM call |
 | 10.11 | Implement prompt injection detection: regex for "ignore instructions", "you are now", "[System", "jailbreak" per §4.2 | nl-interpretation.md §4.2 | All injection patterns produce out_of_scope without LLM call |
-| 10.12 | Implement Taglish/code-switching detection: Tagalog function words (ang, yung, kay, ba, siya, etc.) → non_english | nl-interpretation.md §2.2 non_english | "Guilty ba siya?" triggers non_english; pure English queries unaffected |
+| 10.12 | Implement Tagalog function word detection for language classification (Iteration 1: declined; Iteration 2: see Group 15 — routes to translation) | nl-interpretation.md §2.2 | For Iteration 1: "Guilty ba siya?" → language decline. For Iteration 2: → translate + process. |
 | 10.13 | Implement dual-index routing for cross-domain queries per §2.4 | nl-interpretation.md §2.4 | "Is what Duterte is charged with a crime under the Rome Statute?" retrieves from both RAG 1 and RAG 2 |
 | 10.14 | Implement multi-intent handling: answer valid part, decline out-of-scope part in same response per EC-11 | nl-interpretation.md EC-11 | "Tell me about Count 2. Also, was the drug war justified?" → answers Count 2, declines opinion part |
 | 10.15 | Add judge REJECT criteria: evidence evaluation, hypotheticals, user-injected claims per prompt-spec.md §6.2 v1.1.0 | prompt-spec.md §6.2 | Judge rejects "The evidence strongly supports the charges" |
@@ -406,6 +406,66 @@ These are free open-source libraries installed during Task Group 1:
 
 ---
 
+## Iteration 2 Implementation Tasks
+
+**Reference:** prd-v2.md
+
+### Task Group 15: Language Detection & Translation
+
+**Dependency:** Task Group 14 (Phase 4) complete. System deployed with claim verification.
+
+| # | Task | Spec Reference | Verify By |
+|---|------|---------------|-----------|
+| 15.1 | Create `lib/language-detect.ts`: expanded Tagalog word list (30 words), 0–1 = English / 2+ = Filipino, sub-classify tl vs taglish by English ratio, ambiguous → try as English | nl-interpretation.md §2.3.1 | "Ano yung charges?" → Filipino. "What charges?" → English. Single Tagalog word → try as English. |
+| 15.2 | Create `lib/translate.ts`: GPT-4o-mini translation prompt preserving ICC terms, proper nouns, [REDACTED]; store original_query + translated_query | nl-interpretation.md §2.3.2, prompt-spec.md §4c | Tagalog input → English output. ICC terms unchanged. On failure → fallback to original. |
+| 15.3 | Update intent classifier: remove non_english from VALID_INTENTS; add fact_check | nl-interpretation.md §2.3 | grep codebase for non_english → zero matches (except in decline messages for other languages) |
+| 15.4 | Wire Step 0 (language detect) and Step 1 (translation) into API route before Step 3 (hard gates) | nl-interpretation.md §2.3 | Tagalog query flows: detect → translate → classify → retrieve → generate |
+| 15.5 | DB migration: add response_language to conversation settings (en \| tl \| taglish, default: en) | prd-v2 §5 | conversations table or conversation_settings has response_language |
+| 15.6 | Update PATCH /api/conversations/:id to accept response_language | prd-v2 §10, ARCHITECTURE.md | Request with response_language: "tl" persists and returns in response |
+| 15.7 | Run TL-01 through TL-09 scenarios from nl-interpretation.md §5.13 | nl-interpretation.md §5.13 | All 9 Tanglish/Tagalog Q&A scenarios produce expected behavior |
+
+### Task Group 16: Paste Auto-Detection & Fact-Checker
+
+**Dependency:** Task Group 15 complete.
+
+| # | Task | Spec Reference | Verify By |
+|---|------|---------------|-----------|
+| 16.1 | Create `lib/paste-detect.ts`: deterministic signals for ICC doc vs social media; LLM fallback for ambiguous; default to fact_check | nl-interpretation.md §2.3.3 | Hashtags → social media. "Article [N]" + formal legal → ICC doc. Ambiguous → fact_check. |
+| 16.2 | Create `lib/fact-check.ts`: claim extraction, strip emotion, verify each claim via hybrid search, compute overall verdict | nl-interpretation.md §5.12, prompt-spec.md §4b | "Duterte guilty" post → extract claim, verify → FALSE |
+| 16.3 | Update `lib/prompts.ts`: add fact-check rules (§4b), translation prompt (§4c), R-17 through R-21, fact-check judge REJECT/APPROVE criteria | prompt-spec.md §4b, §4c, §6.2 | Fact-check intent receives §4b block. Judge has fact-check criteria. |
+| 16.4 | Wire Step 2 (paste detect) into pipeline when hasPastedText: route to paste_text or fact_check | nl-interpretation.md §2.3.3 | "fact-check this" prefix → fact_check. Formal ICC text → paste_text. |
+| 16.5 | Implement fact-check response format: verdict at top, 2–3 claims with individual verdicts, citations, copy_text | prompt-spec.md §6.4, Examples 8–10 | Response has VERDICT: FALSE/MISLEADING/ACCURATE. Copy-text includes disclaimer. |
+| 16.6 | Run FC-01 through FC-08 scenarios from nl-interpretation.md §5.12 | nl-interpretation.md §5.12 | All 8 fact-check scenarios produce expected behavior |
+
+### Task Group 17: Multilingual Response Generation
+
+**Dependency:** Task Groups 15–16 complete.
+
+| # | Task | Spec Reference | Verify By |
+|---|------|---------------|-----------|
+| 17.1 | Update `buildSystemPrompt()` for response_language: inject §7b rules based on en/tl/taglish | prompt-spec.md §7b | Tagalog response has ICC terms in English + Filipino gloss. |
+| 17.2 | Add few-shot examples 8–11 to system prompt (fact-check + Tanglish/Tagalog) | prompt-spec.md §5 | Examples 8–11 included when relevant intent. |
+| 17.3 | Create UI language toggle component: English, Tagalog, Tanglish. Persist to conversation. | prd-v2 Journey 8 | Toggle visible; selection persists for conversation. |
+| 17.4 | Create "Copy fact-check" button for fact-check responses. Format per §6.4. | prompt-spec.md §6.4 | Button copies verdict + claims + disclaimer to clipboard. |
+| 17.5 | Update ChatMessage.tsx for verdict rendering: highlight VERDICT, claim-by-claim layout | prd-v2 | Fact-check messages show verdict prominently. |
+| 17.6 | Test natural Filipino responses: no machine-translation artifacts | constitution Principle 1 | Tagalog answers read naturally. |
+
+### Task Group 18: Integration & Regression
+
+**Dependency:** Task Groups 15–17 complete.
+
+| # | Task | Spec Reference | Verify By |
+|---|------|---------------|-----------|
+| 18.1 | Run all existing NL/DD/FD test scenarios for zero regression | nl-interpretation.md §5, §5.10, §10.8 | No regression on iteration 1 behavior |
+| 18.2 | Run updated NL-30, NL-40 (translate + process, not decline) | nl-interpretation.md §5.8, §5.9 | Both scenarios return answers, not language decline |
+| 18.3 | Run all new FC-01–FC-08 and TL-01–TL-09 scenarios | nl-interpretation.md §5.12, §5.13 | All 17 new scenarios pass |
+| 18.4 | grep codebase for non_english: zero matches in spec files and implementation | Verification | non_english does not appear |
+| 18.5 | Verify P-15 removed from nl-interpretation.md prohibited outputs | nl-interpretation.md §4 | P-15 not in table |
+| 18.6 | Update version to 2.0.0 in prompt-spec.md and package.json | prompt-spec.md §9 | Version 2.0.0 reflected |
+| 18.7 | Deploy to production | — | App live with Iteration 2 features |
+
+---
+
 ## Summary
 
 | Group | Tasks | Depends On | Can Parallelize? |
@@ -425,5 +485,9 @@ These are free open-source libraries installed during Task Group 1:
 | 12. Phase 2 Hardening | 11 tasks | Group 11 | Yes — 2a/2b/2c are sequential, but tasks within each phase can parallelize |
 | 13. Phase 3 — False Decline Reduction | 7 tasks | Group 12 | Yes — 3a/3b/3c are sequential, but tasks within each phase can parallelize |
 | 14. Phase 4 — Claim-Level Grounding | 9 tasks | Group 13 | Yes — 4a/4b/4c are sequential, but tasks within each phase can parallelize |
+| 15. Iteration 2 — Language Detection & Translation | 7 tasks | Group 14 | — |
+| 16. Iteration 2 — Paste Auto-Detection & Fact-Checker | 6 tasks | Group 15 | — |
+| 17. Iteration 2 — Multilingual Response Generation | 6 tasks | Group 16 | — |
+| 18. Iteration 2 — Integration & Regression | 7 tasks | Group 17 | — |
 
-**Total: 134 tasks across 15 groups (including external setup)**
+**Total: 169 tasks across 19 groups (including external setup)**

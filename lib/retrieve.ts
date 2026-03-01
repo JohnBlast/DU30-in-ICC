@@ -18,6 +18,7 @@ const INTENT_THRESHOLDS: Record<string, { primary: number; fallback: number }> =
   procedure: { primary: 0.55, fallback: 0.38 },
   glossary: { primary: 0.6, fallback: 0.42 },
   paste_text: { primary: 0.58, fallback: 0.35 },
+  fact_check: { primary: 0.52, fallback: 0.35 },
 };
 
 function getThresholds(intent?: string): { primary: number; fallback: number } {

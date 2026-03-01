@@ -249,7 +249,7 @@ Done condition: [what to verify]
 
 **After each task:**
 
-1. Verify it works (see [Testing Guide](testing-guide.md))
+1. Verify it works (see [Testing Guide](9%20-%20testing-guide.md))
 2. Git commit (see [Git Survival Guide](git-survival-guide.md))
 3. Move to the next task
 

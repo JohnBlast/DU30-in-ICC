@@ -10,6 +10,10 @@ node_modules/
 .next/
 out/
 
+# typescript
+tsconfig.tsbuildinfo
+*.tsbuildinfo
+
 # misc
 .DS_Store
 *.pem
@@ -25,3 +29,6 @@ __pycache__/
 *.pyc
 .venv/
 venv/
+
+# learning docs
+LEARNING*.md

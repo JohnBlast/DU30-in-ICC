@@ -25,12 +25,25 @@ export async function GET(
   const { id } = await params;
   const supabase = getSupabase();
 
-  const { data: conv } = await supabase
+  let conv: { conversation_id: string; expires_at?: string; response_language?: string } | null = null;
+  const { data: convData, error: convError } = await supabase
     .from("conversations")
-    .select("conversation_id, expires_at")
+    .select("conversation_id, expires_at, response_language")
     .eq("conversation_id", id)
     .eq("user_id", userId)
     .single();
+
+  if (convError && /response_language|column/i.test(String(convError.message))) {
+    const fallback = await supabase
+      .from("conversations")
+      .select("conversation_id, expires_at")
+      .eq("conversation_id", id)
+      .eq("user_id", userId)
+      .single();
+    conv = fallback.data as typeof conv;
+  } else {
+    conv = convData;
+  }
 
   if (!conv) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -53,5 +66,14 @@ export async function GET(
     return NextResponse.json({ error: "Failed to load messages" }, { status: 500 });
   }
 
-  return NextResponse.json({ messages: messages ?? [] });
+  const validLanguages = ["en", "tl", "taglish"];
+  const responseLanguage =
+    conv?.response_language && validLanguages.includes(conv.response_language)
+      ? conv.response_language
+      : "en";
+
+  return NextResponse.json({
+    messages: messages ?? [],
+    response_language: responseLanguage,
+  });
 }

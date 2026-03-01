@@ -67,9 +67,12 @@ const TESTS: Array<{
   },
   {
     id: "E2E-16",
-    e2e: "Non-English query",
+    e2e: "Non-English query (Tagalog → translate & answer)",
     query: "Ano yung charges kay Duterte?",
-    expect: (answer) => /English only/i.test(answer),
+    expect: (answer, citations) =>
+      answer.length > 20 &&
+      ((citations.length >= 1 && /charge|count|murder|humanity|duterte/i.test(answer)) ||
+        /could not be verified|rephrasing|Try asking/i.test(answer)),
   },
 ];
 

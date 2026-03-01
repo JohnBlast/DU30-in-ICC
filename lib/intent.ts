@@ -10,8 +10,8 @@ export type IntentCategory =
   | "procedure"
   | "glossary"
   | "paste_text"
-  | "out_of_scope"
-  | "non_english";
+  | "fact_check"
+  | "out_of_scope";
 
 /**
  * Returns RAG indexes to search. [1] = legal framework, [2] = case documents.
@@ -23,9 +23,9 @@ export function intentToRagIndexes(
 ): number[] {
   switch (intent) {
     case "out_of_scope":
-    case "non_english":
       return [];
     case "paste_text":
+    case "fact_check":
       return [1, 2]; // Search both per spec
     case "case_facts":
     case "case_timeline":

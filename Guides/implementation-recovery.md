@@ -189,7 +189,7 @@ git add -A && git commit -m "Task 3: User login flow complete"
 This gives you a save point to return to.
 
 ### Verify before moving on
-After each task, manually check that it works. Open the app, click through the flow, check the data. Don't trust "no errors in terminal" — runtime behavior is what matters. See `9 - testing-guide.md`.
+After each task, manually check that it works. Open the app, click through the flow, check the data. Don't trust "no errors in terminal" — runtime behavior is what matters. See `9 - testing-guide.md` (in this directory).
 
 ### Keep a "discoveries" note
 When you learn something during implementation that wasn't in the spec — write it down. A simple text file:
