@@ -235,15 +235,35 @@ export function ChatMessage({
                         c.verdict === "opinion" && c.evidenceType === "out_of_scope"
                           ? "opinion"
                           : c.verdict;
+                      const markers = (c.citationMarker ?? "")
+                        .match(/\[\d+\]/g)
+                        ?.map((m) => citations?.find((cit) => cit.marker === m))
+                        .filter(Boolean) as Citation[] | undefined;
                       return (
                         <div
                           key={i}
                           className={`rounded-lg border border-gray-200 border-l-4 ${borderColor[key] ?? "border-l-gray-400"} bg-white px-4 py-3 text-sm shadow-sm`}
                         >
                           <div className="flex items-start justify-between gap-3">
-                            <p className="flex-1 font-medium leading-snug text-gray-900">
-                              &ldquo;{c.extractedText}&rdquo;
-                            </p>
+                            <div className="flex flex-1 flex-wrap items-baseline gap-x-2 gap-y-1">
+                              <p className="font-medium leading-snug text-gray-900">
+                                &ldquo;{c.extractedText}&rdquo;
+                              </p>
+                              {markers && markers.length > 0 && (
+                                <span className="flex items-center gap-1">
+                                  {markers.map((cit) => (
+                                    <button
+                                      key={cit.marker}
+                                      type="button"
+                                      onClick={() => setActiveCitation(cit)}
+                                      className="inline-flex cursor-pointer rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-800 hover:bg-blue-200"
+                                    >
+                                      {cit.marker}
+                                    </button>
+                                  ))}
+                                </span>
+                              )}
+                            </div>
                             <div className="shrink-0 pt-0.5">
                               <VerdictBadge verdict={c.verdict} evidenceType={c.evidenceType} />
                             </div>
