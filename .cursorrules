@@ -1,0 +1,32 @@
+# The Docket — AI Agent Context
+
+> Reference these documents for implementation. Do not guess; follow the specs.
+
+## Document Hierarchy
+
+1. **README.md** — Quick start, scripts, doc index.
+2. **constitution.md** — Principles 1–9, governance, tiebreaker rules. Non-negotiable constraints.
+3. **prd.md** — Product requirements: user journeys (§3), functional requirements (§4), data model (§5), success criteria (§7), edge cases (§8), E2E scenarios (§17).
+4. **nl-interpretation.md** — Intent categories (7+non_english), classifier architecture (§2.3), dual-index routing (§2.4), phrase→action mapping (§3.2), prohibited outputs (P-1 through P-19), redaction signals (§4.1), prompt injection patterns (§4.2), acceptance scenarios (NL-01 through NL-50).
+5. **data-quality.md** — CLEAN rules (01–10), validation (VAL-01–10), pipeline order (§3).
+6. **prompt-spec.md** — System prompt structure (§2), dynamic injections (§3), response contract (§6.1), LLM-as-Judge (§6.2), error handling (§8).
+7. **TASKS.md** — Ordered implementation tasks. Never start N+1 until N is verified.
+8. **handoff-checklist.md** — §I Catch-up for AI Agents: current state, key files, quick verification.
+
+## Key Conventions
+
+- **Field names**: Use exact names from PRD §5 (document_id, chunk_id, rag_index, etc.).
+- **Intent categories**: case_facts, case_timeline, legal_concept, procedure, glossary, paste_text, non_english, out_of_scope.
+- **Classifier**: Deterministic-first (Layer 1–2) then LLM (Layer 3). See nl-interpretation.md §2.3.
+- **Dual-index**: Some queries retrieve from both RAG 1 and RAG 2. See nl-interpretation.md §2.4.
+- **RAG**: rag_index 1 = legal framework, 2 = case documents. Mandatory filter.
+- **Citation format**: Inline [N] markers, source_passage from retrieved chunks.
+- **Flat decline**: "This is not addressed in current ICC records." — no engagement, no redirection.
+- **No PII in logs**: constitution Principle 6.
+
+## When Implementing
+
+- Check TASKS.md for verification criteria before marking a task complete.
+- Apply CLEAN rules in order (data-quality.md §3).
+- System prompt must match prompt-spec.md; inject dynamic content per §3.
+- Use 9 - testing-guide.md for verification workflows.

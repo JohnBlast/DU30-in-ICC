@@ -22,6 +22,7 @@ This workflow covers both the **Starter tier** (Constitution + PRD §1-10 + Chec
 **Template:** `templates/constitution.md`
 
 **Prompt Claude:**
+
 ```
 I'm building [description]. Before we write any requirements, help me
 establish project principles. I care about [your priorities]. Ask me
@@ -41,6 +42,7 @@ constitution.md following this template: [paste template]
 **Two approaches:**
 
 **Option A: You already have a PRD.** Give it to Claude:
+
 ```
 Here's my PRD. Read it critically. Tell me every assumption I'm making
 that isn't explicit, every edge case I haven't addressed, and every
@@ -49,6 +51,7 @@ Then interview me on the gaps.
 ```
 
 **Option B: Start from scratch.** Tell Claude what you want:
+
 ```
 I want to build [description]. Interview me about this until you have
 enough detail to write a complete PRD using this template: [paste template].
@@ -56,6 +59,7 @@ Focus on sections 1-10. Push back on anything vague.
 ```
 
 **What to write:**
+
 - Sections 1–10 (standard PRD sections): Overview, users, journeys, requirements, data model, relationships, success criteria, edge cases, capabilities, API contract
 - If your feature has an LLM: also write Sections 11–14
 - If your feature has a data pipeline: also write Sections 12–13
@@ -90,6 +94,7 @@ Does your feature recommend/rank items for users?
 **Template:** `templates/nl-interpretation.md`
 
 **Prompt Claude:**
+
 ```
 Based on the PRD we wrote, I need an NL interpretation contract.
 Start by listing 20+ example user prompts this feature should handle.
@@ -107,6 +112,7 @@ structured JSON output. Use this template: [paste template]
 **Template:** `templates/data-quality.md`
 
 **What to write:**
+
 1. Get a sample of your actual data
 2. Catalogue every dirty pattern you see (case, typos, format)
 3. For each pipeline stage, document what gets normalized and what doesn't
@@ -134,6 +140,7 @@ ambiguous? What will break?
 ```
 
 Focus Claude's questioning on:
+
 - **For LLM features:** "How should the LLM handle [ambiguous query]?" "What field names should it use?" "What happens when it produces invalid output?"
 - **For data pipelines:** "What format are numbers in after [stage]?" "How is the correct tenant resolved?" "What happens to dirty values?"
 - **For recommenders:** "What happens for new users?" "What ranking rules override scoring?" "What bias mitigations are needed?"
@@ -161,10 +168,7 @@ Now that the spec is refined, design the system prompt with Claude.
 **Tool:** Claude
 
 ```
-Based on our spec, here's my tech stack: [your choices].
-Create an ARCHITECTURE.md covering: project structure, key technical
-decisions and why, API contracts, database schema, third-party
-dependencies, and anything I'll regret not deciding upfront.
+https://github.com/JohnBlast/DU30-in-ICC.git
 ```
 
 If you haven't chosen a tech stack yet, see [Tech Stack Picker](tech-stack-picker.md).
@@ -226,6 +230,7 @@ conventions, and implementation rules.
 Open Cursor with your project folder containing all spec documents and `.cursorrules`.
 
 **First task** is usually project scaffolding:
+
 ```
 Implement Task 1 from TASKS.md: [scaffold description].
 Set up the project structure per ARCHITECTURE.md.
@@ -243,6 +248,7 @@ Done condition: [what to verify]
 ```
 
 **After each task:**
+
 1. Verify it works (see [Testing Guide](testing-guide.md))
 2. Git commit (see [Git Survival Guide](git-survival-guide.md))
 3. Move to the next task
@@ -260,6 +266,7 @@ Done condition: [what to verify]
 ### Step 5.4: Checkpoints
 
 Every 3-5 tasks, do a full walkthrough:
+
 1. Go through every completed user journey end-to-end
 2. Check data in the database
 3. Compare against the spec
@@ -289,15 +296,17 @@ See [Lessons Learned](lessons-learned.md) template.
 
 ## Summary Timeline
 
-| Phase | Tool | Duration | Key Output |
-|-------|------|----------|-----------|
-| 1. Define | Claude | 3-6 hours | Constitution, PRD, companion docs |
-| 2. Specify & Clarify | Claude | 1-2 hours | Refined spec, prompt spec |
-| 3. Plan | Claude | 1-2 hours | ARCHITECTURE.md, E2E scenarios |
-| 4. Tasks | Claude | 30-60 min | TASKS.md, .cursorrules, handoff checklist |
-| 5. Build | Cursor | Varies | Working product |
-| 6. Ship | Cursor + Vercel/etc | 30-60 min | Live URL |
-| 7. Learn | Claude | 30 min | Lessons learned doc |
+
+| Phase                | Tool                | Duration  | Key Output                                |
+| -------------------- | ------------------- | --------- | ----------------------------------------- |
+| 1. Define            | Claude              | 3-6 hours | Constitution, PRD, companion docs         |
+| 2. Specify & Clarify | Claude              | 1-2 hours | Refined spec, prompt spec                 |
+| 3. Plan              | Claude              | 1-2 hours | ARCHITECTURE.md, E2E scenarios            |
+| 4. Tasks             | Claude              | 30-60 min | TASKS.md, .cursorrules, handoff checklist |
+| 5. Build             | Cursor              | Varies    | Working product                           |
+| 6. Ship              | Cursor + Vercel/etc | 30-60 min | Live URL                                  |
+| 7. Learn             | Claude              | 30 min    | Lessons learned doc                       |
+
 
 **Total PM prep time before implementation:** 3-5 hours for a standard feature, 6-12 hours for a complex LLM feature, 10-16 hours for LLM + RAG.
 

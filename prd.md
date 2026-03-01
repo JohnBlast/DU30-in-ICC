@@ -30,7 +30,7 @@ Enable young Filipino digital natives to:
 
 ### Core Capability
 
-DU30 in ICC uses a dual-index RAG pattern: user questions are embedded and matched against two separate ICC document indexes — one for ICC legal framework (laws, procedures, definitions) and one for Duterte case-specific documents (indictments, rulings, press releases). Users can also paste text from ICC documents into the chat, which is cross-referenced against the knowledge base using the same hybrid search pipeline (BM25 + vector with RRF fusion), followed by FlashRank reranking. Multi-turn conversations are supported (last 5 turns as LLM context, 7-day auto-expiry, per-user isolation). Every generated answer is verified by a second LLM-as-Judge before being shown to the user — with inline citation markers linking each claim to its source passage.
+DU30 in ICC uses a dual-index RAG pattern: user questions are embedded and matched against two separate ICC document indexes — one for ICC legal framework (laws, procedures, definitions) and one for Duterte case-specific documents (indictments, rulings, press releases). Users can also paste text from ICC documents into the chat, which is cross-referenced against the knowledge base using the same hybrid search pipeline (BM25 + vector with RRF fusion), followed by FlashRank reranking. Multi-turn conversations are supported (last 3 turns as LLM context, 7-day auto-expiry, per-user isolation). Every generated answer is verified by a second LLM-as-Judge before being shown to the user — with inline citation markers linking each claim to its source passage.
 
 ### Out of Scope (Iteration 1)
 
@@ -60,6 +60,8 @@ DU30 in ICC uses a dual-index RAG pattern: user questions are embedded and match
 - Look up ICC legal and Latin terms in the glossary
 - View the source passage behind every citation via inline preview, with a link to the full ICC document
 - Continue multi-turn conversations across sessions (up to 7-day expiry)
+- Delete conversations and bookmark conversations for quick access
+- Copy message text to clipboard
 
 **Restrictions:**
 
@@ -137,7 +139,7 @@ DU30 in ICC uses a dual-index RAG pattern: user questions are embedded and match
 2. User sees their existing conversations (up to 7 days old) or starts a new one
 3. User asks a question; system responds with a cited answer
 4. User asks a follow-up (e.g., *"What happens after that?"* or *"Can you explain the third count in simpler terms?"*)
-5. System includes the last 5 user-assistant exchanges as context for the LLM (older turns remain visible in UI but are not sent to the LLM)
+5. System includes the last 3 user-assistant exchanges as context for the LLM (older turns remain visible in UI but are not sent to the LLM)
 6. LLM generates a contextual follow-up answer with citations; LLM-as-Judge verifies independently
 7. Each response is evaluated for political neutrality independently — conversational context does not erode guardrails
 8. After 7 days, the conversation is automatically and permanently deleted
@@ -181,7 +183,7 @@ DU30 in ICC uses a dual-index RAG pattern: user questions are embedded and match
 - System shall include a direct link to the ICC source document URL alongside every citation
 - System shall display the knowledge base last-updated timestamp alongside every answer
 - System shall target answer delivery within 10 seconds (soft goal — not a hard SLA); display a loading state for longer queries
-- System shall include the last 5 user-assistant exchanges as conversational context for multi-turn queries; older turns are excluded from the LLM call
+- System shall include the last 3 user-assistant exchanges as conversational context for multi-turn queries; older turns are excluded from the LLM call
 
 ### Document Library
 
@@ -240,10 +242,11 @@ Other requirements:
 ### Multi-Turn Conversations
 
 - System shall support multi-turn conversations where follow-up questions build on previous context
-- System shall send the last 5 user-assistant exchanges as context to the LLM on each turn; older turns remain visible in the UI but are excluded from the LLM call
+- System shall send the last 3 user-assistant exchanges as context to the LLM on each turn; older turns remain visible in the UI but are excluded from the LLM call
 - Conversations persist for 7 days from the last message, then are automatically and permanently deleted — no recovery
 - After 7 days, the user is prompted to start a new conversation
 - Users can create multiple conversations and switch between them within the 7-day window
+- Users can delete conversations and bookmark conversations (bookmarked appear first in sidebar)
 - Conversation history is strictly isolated per user — no user can access, view, or infer another user's history
 
 ### Authentication & Access
@@ -251,8 +254,7 @@ Other requirements:
 - System shall require admin-created username + password for access — no self-registration
 - The admin (project owner) manually creates accounts for each user
 - Each user's conversation history is linked to their account and isolated from other users
-- System shall display on every page: *"This is an independent AI tool. Not affiliated with or endorsed by the International Criminal Court."*
-- System shall display on every page: *"AI-generated content based on ICC official documents. Not legal advice."*
+- System shall display on every page: *"This is an independent AI tool. Not affiliated with or endorsed by the International Criminal Court."* and *"Not legal advice — consult a qualified attorney."* — displayed in a non-blocking footer that does not obscure the chat input
 - System shall display a data privacy notice on the login page
 
 ### Cost Controls
@@ -499,12 +501,15 @@ A plain-English definition of an ICC legal or Latin term.
       "title": "Charges against Duterte",
       "created_at": "2026-02-25T10:00:00Z",
       "last_message_at": "2026-02-25T10:15:00Z",
-      "expires_at": "2026-03-04T10:15:00Z",
-      "message_count": 6
+      "is_bookmarked": false
     }
   ]
 }
 ```
+
+**Endpoint:** `DELETE /api/conversations/:id` — Delete a conversation. Returns `{ deleted: true }` on success.
+
+**Endpoint:** `PATCH /api/conversations/:id` — Update a conversation. Request body: `{ is_bookmarked?: boolean, title?: string }`. Returns updated conversation.
 
 **Endpoint:** `GET /api/conversations/:id/messages`
 
@@ -650,7 +655,7 @@ A plain-English definition of an ICC legal or Latin term.
 | NL-06 | Question has no relevant ICC documents                              | User asks about unrelated event                         | Returns: *"This is not addressed in current ICC records."*                                                 |
 | NL-07 | User pastes text not in knowledge base                              | `pasted_text` set, no KB match                          | Answer provided with warning: *"This text could not be verified against ingested ICC documents."*          |
 | NL-08 | User asks *"Who is [REDACTED] in the charges?"*                     | Any state                                               | System acknowledges redaction and declines: *"This content is redacted in ICC records."*                   |
-| NL-09 | User asks follow-up in multi-turn                                   | Conversation has prior context                          | Answer uses last 5 turns as context; independently verified for neutrality by LLM-as-Judge                 |
+| NL-09 | User asks follow-up in multi-turn                                   | Conversation has prior context                          | Answer uses last 3 turns as context; independently verified for neutrality by LLM-as-Judge                 |
 | NL-10 | User asks *"What's Duterte's favorite color?"*                      | Any state                                               | Flat decline: *"This is not addressed in current ICC records."*                                            |
 
 
@@ -667,8 +672,10 @@ Curated URL list → Firecrawl scrape → content hash check → Unstructured.io
 
 **Job 2 — New filing discovery (weekly, runs after Job 1):**
 ```
-Case records filtered URL → Firecrawl scrape → extract new document links → Firecrawl scrape each new URL → Unstructured.io (parse) → LangChain Splitter (chunk) → OpenAI Embeddings → Supabase pgvector (store)
+Case records filtered URL → Firecrawl scrape → extract new document links → filter by document type (Decision, Order, Warrant, Filing, Judgment only) → Firecrawl scrape each new URL → Unstructured.io (parse) → LangChain Splitter (chunk) → OpenAI Embeddings → Supabase pgvector (store)
 ```
+
+**Job 2 document type filter:** Only ingest documents of type **Decision**, **Order**, **Warrant**, **Filing**, and **Judgment**. Skip **Transcript**, **Registry**, **Translation**, and any administrative documents. Transcripts are deferred to a future iteration — the substantive legal findings from hearings are captured in Decisions and Orders, which have a much better signal-to-noise ratio for Q&A retrieval.
 
 ### 12.2 Data Shape at Each Boundary
 
@@ -806,7 +813,7 @@ All URLs validated with Firecrawl scrape-mode. Ingestion uses scrape-mode only �
 | Resource Library | https://www.icc-cpi.int/resource-library | 1 | HTML → plain text | Rarely |
 | Main Duterte case page | https://www.icc-cpi.int/philippines/duterte | 2 | HTML → plain text | Weekly |
 | Philippines situation page | https://www.icc-cpi.int/philippines | 2 | HTML → plain text | Weekly |
-| Case records — all filings *(discovery job)* | https://www.icc-cpi.int/case-records?f%5B0%5D=cr_case_code%3A1527 | 2 | HTML → extract links | Weekly |
+| Case records — filtered filings *(discovery job)* | https://www.icc-cpi.int/case-records?f%5B0%5D=cr_case_code%3A1527 | 2 | HTML → extract links → filter by document type (Decision, Order, Warrant, Filing, Judgment only; skip Transcript, Registry, Translation) | Weekly |
 | Case Information Sheet (Feb 2026) | https://www.icc-cpi.int/sites/default/files/2026-02/DuterteEng.pdf | 2 | PDF → plain text | Weekly |
 | Key Messages document | https://www.icc-cpi.int/sites/default/files/2025-07/Duterte%20Case%20Key%20Messages.pdf | 2 | PDF → plain text | Weekly |
 | Document Containing the Charges (Sep 2025) | https://www.icc-cpi.int/sites/default/files/CourtRecords/0902ebd180c9bfd4.pdf | 2 | PDF → plain text | Weekly |
@@ -844,10 +851,10 @@ All URLs validated with Firecrawl scrape-mode. Ingestion uses scrape-mode only �
 | ------------------------------------ | --------------------------------------- | ----------------------------------------------------------------------------- |
 | Initial top-k (pre-rerank)           | 10                                      | Wide net for hybrid search; FlashRank narrows to best                         |
 | Final top-k (post-rerank)            | 4                                       | Enough context for LLM without exceeding token budget                         |
-| Similarity threshold                 | 0.68                                    | Below this, chunks are unlikely to be relevant                                |
+| Similarity threshold                 | Intent-adaptive: 0.52–0.60 (see nl-interpretation.md §10.4 F-2). Originally 0.68; lowered per intent in Phase 3 to reduce false declines while maintaining safety via judge + citation validation. | Below this, chunks are unlikely to be relevant |
 | Mandatory filter                     | `rag_index` matches query intent        | Prevents legal framework chunks appearing in case fact answers and vice versa |
 | Paste-text cross-reference           | Hybrid search (BM25 + vector) on pasted text | Identifies source document for citation; uses same pipeline as query retrieval |
-| Paste-text match threshold           | Same as similarity threshold (0.68)     | Below this, pasted text is flagged as unverified                              |
+| Paste-text match threshold           | Same as similarity threshold (intent-adaptive) | Below this, pasted text is flagged as unverified                              |
 | Fallback (no chunks above threshold) | Return "not in ICC records" message     | Never hallucinate when retrieval fails                                        |
 
 
@@ -892,7 +899,7 @@ All URLs validated with Firecrawl scrape-mode. Ingestion uses scrape-mode only �
 | E2E-07 | Question not in ICC records      | *"What does Duterte's family think?"*                        | Flat decline: *"This is not addressed in current ICC records."*                                      |
 | E2E-08 | LLM generates unverified claim   | LLM answer contains unsupported claim                        | LLM-as-Judge blocks; user sees *"This answer could not be verified against ICC documents."*          |
 | E2E-09 | New ICC document published       | Discovery job finds new filing link in case records page     | New URL scraped; document chunked, embedded, stored; last-updated refreshed                          |
-| E2E-10 | Multi-turn follow-up             | User asks *"What are the charges?"* then *"Explain count 2"* | Second answer uses last 5 turns as context; independently verified; cites DCC                        |
+| E2E-10 | Multi-turn follow-up             | User asks *"What are the charges?"* then *"Explain count 2"* | Second answer uses last 3 turns as context; independently verified; cites DCC                        |
 | E2E-11 | Redacted content question        | *"Who is [REDACTED] in the charges?"*                        | System acknowledges redaction; declines to investigate                                               |
 | E2E-12 | Out-of-bounds personal trivia    | *"What's Duterte's favorite color?"*                         | Flat decline: *"This is not addressed in current ICC records."*                                      |
 | E2E-13 | Soft daily limit reached         | User makes 31st query of the day                             | Nudge message shown; user can still query                                                            |

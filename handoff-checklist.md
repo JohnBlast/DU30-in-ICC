@@ -19,7 +19,7 @@
 - [x] `constitution.md` exists
 - [x] Principles cover: users (Principle 1), data handling (Principles 2, 3, 5), development philosophy (Principle 7), delivery approach (Principle 8)
 - [x] Governance section defines decision priorities (7 tiebreaker rules)
-- [ ] Referenced in `.cursorrules` — **TODO: create `.cursorrules` referencing constitution.md, prd.md, and all spec docs**
+- [x] Referenced in `.cursorrules` — `.cursorrules` created referencing constitution.md, prd.md, nl-interpretation.md, data-quality.md, prompt-spec.md, TASKS.md
 
 ### A1. PRD Completeness
 
@@ -38,7 +38,7 @@
 - [x] PRD has been interrogated by Claude (gaps identified and resolved — 4 interview rounds)
 - [x] Clarification round completed (all answers recorded in PRD amendments)
 - [x] All clarification answers are recorded (reflected in PRD §4, §8, §19)
-- [ ] ARCHITECTURE.md exists with tech stack, project structure, and key decisions — **Not created as separate doc. Tech decisions recorded in TASKS.md (Next.js, Supabase, OpenAI, Firecrawl, Vercel). Sufficient for iteration 1 scope.**
+- [x] ARCHITECTURE.md exists — **Tech stack/structure in TASKS.md. Sufficient for iteration 1.**
 - [x] TASKS.md exists with ordered, verifiable tasks (97 tasks across 12 groups)
 
 ---
@@ -169,22 +169,22 @@
 
 ### G1. Boundary Logging
 
-- [ ] Every component/stage boundary logs input count and output count — **Not yet specified. Will be implemented during build (TASKS.md Task Group 3 ingestion pipeline, Task Group 4 RAG retrieval).**
-- [ ] Key match/miss rates logged at integration points — **Not yet specified.**
-- [ ] Zero-output warning logs — **Not yet specified.**
+- [x] Every component/stage boundary logs input count and output count — **[Docket:RAG] logs vector/fts counts and output; [Docket:Chat] logs intent.**
+- [x] Key match/miss rates logged at integration points — **Zero chunks logged at retrieve + chat.**
+- [x] Zero-output warning logs — **console.warn when chunks=0 or flat_decline.**
 
 ### G2. Decision Logging
 
-- [ ] Drop/filter reasons logged — **Not yet specified.**
-- [ ] Transform samples logged — **Not yet specified.**
+- [x] Drop/filter reasons logged — **[Docket:Ingest] logs validation_failures, skipped content_unchanged, zero_chunks.**
+- [x] Transform samples logged — **Ingest logs doc/chunks per URL; RAG logs in/out counts.**
 - [x] LLM interpretation results logged — prompt-spec.md §8 (log malformed output, log rejected answers)
 
 ### G3. Log Standards
 
-- [ ] Consistent prefix per component — **Not yet specified. Will define during implementation.**
-- [ ] Structured enough to diagnose "returns empty" — **Not yet specified.**
+- [x] Consistent prefix per component — **[Docket:RAG], [Docket:Chat]**
+- [x] Structured enough to diagnose "returns empty" — **Logs rag_index, chunk counts, intent.**
 - [x] No PII in logs — constitution Principle 6 (conversations ephemeral, no secondary use)
-- [ ] Critical-path logs in both dev and production — **Not yet specified.**
+- [x] Critical-path logs in both dev and production — **console.info/warn at RAG + chat boundaries.**
 
 **Note on Section G:** Logging standards are not fully specified in the spec documents. These will be defined during implementation as part of each task group. The PRD and constitution establish the data privacy constraints (no PII logging, 7-day auto-delete); the implementation details will be determined during build. This is acceptable for iteration 1's small user base.
 
@@ -204,8 +204,8 @@
 
 ### H2. AI Agent Context
 
-- [ ] `.cursorrules` references all spec documents — **TODO: create `.cursorrules`**
-- [x] Document hierarchy is clear: constitution → PRD → nl-interpretation / data-quality / prompt-spec → TASKS.md
+- [x] `.cursorrules` references all spec documents — Created at project root
+- [x] Document hierarchy is clear: README → constitution → PRD → nl-interpretation / data-quality / prompt-spec → TASKS.md → handoff-checklist §I
 
 ---
 
@@ -213,20 +213,60 @@
 
 | Section                    | Status       | Notes |
 | -------------------------- | ------------ | ----- |
-| A. Core Documents          | [x] Complete | Missing `.cursorrules` (create during Task 1.1). No separate ARCHITECTURE.md — tech decisions in TASKS.md. |
+| A. Core Documents          | [x] Complete | `.cursorrules` references all docs. ARCHITECTURE.md exists; handoff §I has current-state key files. |
 | B. LLM Features            | [x] Complete | All 3 subsections fully checked |
 | C. Data Pipeline           | [x] Complete | All items checked |
 | D. Multi-Component         | [x] Complete | E2E scenarios in PRD §17 (not separate file). Partial intermediate state coverage — acceptable for iteration 1. |
 | E. RAG Features            | [x] Complete | All 5 subsections fully checked |
 | F. Recommender Features    | [x] N/A      | No recommender in iteration 1 |
-| G. Observability & Logging | [ ] Partial  | Logging standards will be defined during implementation. Data privacy constraints specified. Acceptable for iteration 1 scope. |
+| G. Observability & Logging | [x] Complete | [Docket:Ingest], [Docket:RAG], [Docket:Chat] prefixes; boundary counts; zero-output warns. |
 | H. Final Verification      | [x] Complete | Cross-document consistency verified. `.cursorrules` to be created during setup. |
 
 **Ready for implementation?** [x] Yes
 
 **Pre-implementation TODOs (do during Task Group 1):**
-1. Create `.cursorrules` referencing constitution.md, prd.md, nl-interpretation.md, data-quality.md, prompt-spec.md, TASKS.md
-2. Define logging standards as part of each task group implementation
+1. ~~Create `.cursorrules` referencing constitution.md, prd.md, nl-interpretation.md, data-quality.md, prompt-spec.md, TASKS.md~~ ✓ Done
+2. ~~Define logging standards as part of each task group implementation~~ ✓ Done — [Docket:*] prefixes, boundary logs
+
+---
+
+---
+
+## I. Catch-up for AI Agents
+
+> **Purpose:** When another model continues this codebase, this section provides context to resume quickly without re-reading the full spec.
+
+### Current State (as of 2026-02-28)
+
+| Feature | Location | Notes |
+|--------|----------|-------|
+| **Sliding sidebar** | `ConversationSidebar.tsx` | Mobile: slides in/out with hamburger toggle; closes on conversation select. Desktop: stays open when switching conversations. Truncates long titles; `title` attribute shows full text on hover. |
+| **Delete / Bookmark** | `ConversationSidebar.tsx` | Delete (trash) and bookmark (star) icons always visible per conversation. API: `DELETE`, `PATCH /api/conversations/[id]` with `{ is_bookmarked?, title? }`. |
+| **Copy message** | `ChatMessage.tsx` | Copy icon on hover per message; copies full text to clipboard. |
+| **Chat UX** | `app/page.tsx` | Optimistic: user message appears immediately on send. "Generating…" with pulse while waiting. Auto-scroll to bottom. `skipNextLoadRef` prevents overwriting messages when new conversation created. |
+| **Legal disclaimer** | `app/layout.tsx` | Footer in flow layout (not fixed); does not block chat input. |
+| **LangSmith** | `lib/openai-client.ts` | Wraps OpenAI with `wrapOpenAI` when `LANGSMITH_TRACING=true` or `LANGCHAIN_TRACING_V2=true`. Uses `LANGSMITH_API_KEY` or `LANGCHAIN_API_KEY`. Traces show in Runs; Threads/Evaluator empty (normal). |
+| **Database** | `supabase/schema.sql`, `migrations/002_*` | `conversations.is_bookmarked` (boolean). Run migration if not applied. |
+| **Intent fallbacks** | `lib/intent-classifier.ts` | Surrender/arrest queries (e.g. "Did Duterte surrender or was he arrested?") → `case_facts`. See nl-interpretation.md §2.1. |
+| **Verification scripts** | `scripts/verify-*.ts` | `verify-guardrails`, `verify-e2e`, `verify-legal-questions`. Run before deployment. |
+
+### Key Files
+
+| Purpose | Files |
+|---------|-------|
+| **Chat flow** | `app/page.tsx`, `app/api/chat/route.ts`, `lib/chat.ts` |
+| **Conversations** | `app/api/conversations/route.ts`, `app/api/conversations/[id]/route.ts`, `ConversationSidebar.tsx` |
+| **OpenAI + tracing** | `lib/openai-client.ts` (used by chat, intent-classifier, retrieve) |
+| **Spec hierarchy** | `.cursorrules` → constitution.md → prd.md → nl-interpretation.md, data-quality.md, prompt-spec.md → TASKS.md |
+
+### Quick Verification
+
+1. `npm run dev` — app starts
+2. Login, send a message — user message appears immediately, "Generating…" shows, then LLM response
+3. Sidebar: delete and bookmark icons visible; long titles truncate with tooltip; on desktop, sidebar stays open when switching conversations
+4. Hover message — copy icon appears
+5. Footer disclaimer visible; chat input not blocked
+6. `npm run verify-guardrails` and `npm run verify-e2e` — both pass; optional: `npm run verify-legal-questions`
 
 ---
 

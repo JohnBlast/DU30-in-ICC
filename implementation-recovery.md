@@ -34,7 +34,7 @@ Diagnosing which type you're dealing with is the most important step. Don't star
    ```
 4. If Cursor can't fix it, check if the error references a file that was recently changed — that's your culprit
 
-**If you've been going back and forth for more than 3 attempts:** Git stash your changes, go back to the last working version, and re-approach the task in smaller steps. See [Git Survival Guide](git-survival-guide.md).
+**If you've been going back and forth for more than 3 attempts:** Git stash your changes, go back to the last working version, and re-approach the task in smaller steps.
 
 ### Symptom: Feature Works But Looks Wrong
 
@@ -52,13 +52,13 @@ Diagnosing which type you're dealing with is the most important step. Don't star
 
 **This is the spec-to-code gap — the most common problem.**
 
-1. Open SPEC.md and find the relevant requirement
+1. Open prd.md or TASKS.md and find the relevant requirement
 2. Check: did Cursor implement what the spec says, or something different?
 3. If different: paste the spec requirement into Cursor and ask it to align:
    ```
-   Per SPEC.md §4: "System shall restrict results to the current tenant's catalog."
+   Per prd.md §4: "System shall restrict results to the current tenant's catalog."
    Right now, the search is returning products from all tenants.
-   Fix the query in src/lib/search.ts to filter by tenant_id.
+   Fix the query to filter by tenant_id.
    ```
 4. If the spec is ambiguous (could be read two ways): go to Claude, clarify the requirement, update the spec, then come back to Cursor
 
@@ -95,16 +95,15 @@ This means the task is too complex or the context is too muddled. Stop iterating
 
 **This is a spec change, not a bug.**
 
-1. Go to Claude and update the spec:
+1. Update the spec:
    ```
    I've changed my mind about [feature]. Instead of [old behavior],
-   I want [new behavior]. Update SPEC.md section [N] to reflect this.
+   I want [new behavior]. Update prd.md section [N] to reflect this.
    Also update TASKS.md if the task list needs to change.
    ```
-2. Copy the updated spec back to your project
-3. In Cursor, tell it about the change:
+2. In Cursor, tell it about the change:
    ```
-   SPEC.md has been updated. [Feature] now works differently.
+   prd.md has been updated. [Feature] now works differently.
    Read the updated §[N] and adjust the implementation.
    ```
 
@@ -145,7 +144,7 @@ Common with complex tasks. The AI agent adds error handling you didn't specify, 
 
 **How to handle:**
 ```
-Remove the [feature]. It's not in SPEC.md and it's out of scope.
+Remove the [feature]. It's not in prd.md and it's out of scope.
 Keep only what's defined in Task [N].
 ```
 
@@ -187,10 +186,10 @@ You're 5 tasks in and realize the whole approach is wrong.
 ```bash
 git add -A && git commit -m "Task 3: User login flow complete"
 ```
-This gives you a save point to return to. See [Git Survival Guide](git-survival-guide.md).
+This gives you a save point to return to.
 
 ### Verify before moving on
-After each task, manually check that it works. Open the app, click through the flow, check the data. Don't trust "no errors in terminal" — runtime behavior is what matters. See [Testing Guide](testing-guide.md).
+After each task, manually check that it works. Open the app, click through the flow, check the data. Don't trust "no errors in terminal" — runtime behavior is what matters. See `9 - testing-guide.md`.
 
 ### Keep a "discoveries" note
 When you learn something during implementation that wasn't in the spec — write it down. A simple text file:
@@ -200,7 +199,7 @@ DISCOVERIES.md
 - Supabase auth magic links expire in 1 hour, not 24
 - Tailwind's `grid-cols-3` needs explicit breakpoints for responsive
 ```
-This becomes input for your [Lessons Learned](lessons-learned.md) at the end.
+This becomes input for post-iteration review.
 
 ---
 

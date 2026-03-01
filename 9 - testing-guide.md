@@ -103,6 +103,21 @@ You don't need to be a developer to use these three things:
 
 ---
 
+## Verification Scripts (The Docket)
+
+The project includes automated verification scripts. Run these before deploying:
+
+| Script | Purpose |
+|--------|---------|
+| `npm run verify-guardrails` | Out-of-scope, redacted, non-English, multi-turn neutrality, paste-text bias |
+| `npm run verify-e2e` | E2E scenarios from PRD §17 (ICC law, case facts, glossary, etc.) |
+| `npm run verify-legal-questions` | 22 legal questions across 9 categories (jurisdiction, charges, procedure, etc.) |
+| `npm run check-retrieval -- "<query>"` | Debug what chunks RAG returns for a query |
+
+If any script fails, fix before proceeding. See handoff-checklist.md §I for Quick Verification.
+
+---
+
 ## When to Ask Cursor for Automated Tests
 
 For most vibe-coded MVPs, manual verification is enough. But ask Cursor to write automated tests when:
@@ -129,7 +144,7 @@ After every 3-5 tasks, do a "checkpoint" — a more thorough review:
 
 1. **Full walkthrough:** Open the app and go through every user journey in the spec from start to finish
 2. **Data check:** Look at the actual data in your database (Supabase dashboard, database viewer, etc.) — does it look right?
-3. **Spec alignment:** Open SPEC.md and compare each completed feature against the requirements. Anything drifting?
+3. **Spec alignment:** Open prd.md and compare each completed feature against the requirements. Anything drifting?
 4. **Cross-feature:** Do the features you've built work together? (e.g., can you create a product, then search for it, then view it?)
 5. **Git tag:** Mark this checkpoint so you can return to it:
    ```bash
@@ -160,7 +175,7 @@ Create a seed file at src/lib/seed.ts that populates the database with:
 - 5 orders (including one cancelled)
 - Price values including comma-decimal format ("29,99")
 
-Per SPEC.md §5, use these exact field names: [list fields]
+Per prd.md §5, use these exact field names: [list fields]
 ```
 
 **Good seed data includes:**

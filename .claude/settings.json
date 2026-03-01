@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//Users/John/Project\\\\ ICC\\\\ -\\\\ DU30/lib/**)",
+      "Read(//Users/John/Project\\\\ ICC\\\\ -\\\\ DU30/**)",
+      "Read(//Users/John/Project\\\\ ICC\\\\ -\\\\ DU30/app/api/chat/**)"
+    ]
+  }
+}
