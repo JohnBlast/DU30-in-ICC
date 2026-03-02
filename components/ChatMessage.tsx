@@ -22,7 +22,8 @@ export type ClaimVerdict =
   | "false"
   | "unverifiable"
   | "not_in_icc_records"
-  | "opinion";
+  | "opinion"
+  | "mixed";
 
 export interface VerifiedClaim {
   extractedText: string;
@@ -51,6 +52,16 @@ interface ChatMessageProps {
   factCheck?: FactCheckResult | null;
 }
 
+/** Strip ingest-added [Section: ...] prefixes from chunk/answer content for cleaner display. */
+function stripSectionPrefix(text: string): string {
+  return text.replace(/^\[Section:[^\]]+\]\s*\n?/, "").trim();
+}
+
+/** Remove [Section: ...] blocks from content (LLM sometimes copies these from chunks). */
+function stripSectionBlocks(text: string): string {
+  return text.replace(/\n?\[Section:[^\]]+\]\s*\n?/g, "\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 /** Parse user message content that may include pasted text */
 function parseUserContent(content: string): { pasted?: string; query: string } | null {
   if (!content.startsWith("[Pasted text]\n")) return null;
@@ -63,11 +74,31 @@ function parseUserContent(content: string): { pasted?: string; query: string } |
   };
 }
 
+/** Render **bold** markdown in text as <strong>. */
+function renderBoldInText(text: string, keyPrefix: string): React.ReactNode {
+  const parts: React.ReactNode[] = [];
+  const regex = /\*\*([^*]+)\*\*/g;
+  let lastIndex = 0;
+  let i = 0;
+  let m;
+  while ((m = regex.exec(text)) !== null) {
+    if (m.index > lastIndex) {
+      parts.push(text.slice(lastIndex, m.index));
+    }
+    parts.push(<strong key={`${keyPrefix}-b${i++}`}>{m[1]}</strong>);
+    lastIndex = regex.lastIndex;
+  }
+  if (lastIndex < text.length) {
+    parts.push(text.slice(lastIndex));
+  }
+  return parts.length > 0 ? <>{parts}</> : text;
+}
+
 function linkGlossaryInText(text: string, keyPrefix: string): React.ReactNode[] {
   const segments = splitGlossaryTerms(text);
   return segments.map((seg, i) =>
     seg.type === "text" ? (
-      seg.value
+      <span key={`${keyPrefix}-${i}`}>{renderBoldInText(seg.value, `${keyPrefix}-t${i}`)}</span>
     ) : (
       <Link
         key={`${keyPrefix}-${i}`}
@@ -130,6 +161,7 @@ const verdictColors: Record<string, { bg: string; text: string; label: string }>
   not_in_icc_records: { bg: "bg-gray-100", text: "text-gray-600", label: "NOT IN ICC RECORDS" },
   opinion: { bg: "bg-blue-100", text: "text-blue-700", label: "OPINION" },
   out_of_scope: { bg: "bg-gray-100", text: "text-gray-500", label: "OUT OF SCOPE" },
+  mixed: { bg: "bg-amber-100", text: "text-amber-800", label: "MIXED" },
 };
 
 function getClaimSummary(claims: VerifiedClaim[]): string {
@@ -139,6 +171,7 @@ function getClaimSummary(claims: VerifiedClaim[]): string {
 
   if (falseCount > 0) return `${total} claim${total !== 1 ? "s" : ""} checked — ${falseCount} false`;
   if (verifiedCount === total) return `${total} claim${total !== 1 ? "s" : ""} verified`;
+  if (verifiedCount > 0) return `${total} claim${total !== 1 ? "s" : ""} checked — ${verifiedCount} verified`;
   return `${total} claim${total !== 1 ? "s" : ""} checked`;
 }
 
@@ -335,9 +368,33 @@ export function ChatMessage({
               content
             )
           ) : (
-            renderContentWithCitations(content, citations, setActiveCitation)
+            <div className="space-y-2 leading-relaxed">
+              {renderContentWithCitations(stripSectionBlocks(content), citations, setActiveCitation)}
+            </div>
           )}
         </div>
+
+        {!isUser && citations.length > 0 && (
+          <div className="mt-4 rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2">
+            <p className="text-xs font-medium uppercase tracking-wide text-gray-400">
+              Sources
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {citations.map((c) => (
+                <li key={c.marker}>
+                  <button
+                    type="button"
+                    onClick={() => setActiveCitation(c)}
+                    className="flex items-start gap-2 text-left text-xs text-gray-700 hover:text-blue-700 hover:underline"
+                  >
+                    <span className="shrink-0 font-medium text-blue-600">{c.marker}</span>
+                    <span className="line-clamp-1">{c.document_title}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {!isUser && (
           <p className="mt-3 text-xs text-gray-500">
@@ -368,38 +425,50 @@ export function ChatMessage({
 
       {activeCitation && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
           onClick={() => setActiveCitation(null)}
           role="dialog"
           aria-modal="true"
           aria-label="Source passage"
         >
           <div
-            className="max-h-[80vh] max-w-lg overflow-auto rounded-lg bg-white p-6 shadow-xl"
+            className="max-h-[85vh] w-full max-w-xl overflow-auto rounded-xl border border-gray-200 bg-white p-6 shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <h3 className="font-semibold text-gray-900">{activeCitation.document_title}</h3>
+            <div className="flex items-start justify-between gap-4">
+              <h3 className="text-base font-semibold leading-tight text-gray-900">
+                {activeCitation.document_title}
+              </h3>
+              <button
+                type="button"
+                onClick={() => setActiveCitation(null)}
+                className="shrink-0 rounded-lg p-2 text-gray-400 hover:bg-gray-100 hover:text-gray-600"
+                aria-label="Close"
+              >
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
             <p className="mt-1 text-xs text-gray-500">{activeCitation.date_published}</p>
-            <p className="mt-4 text-sm text-gray-700 leading-relaxed">
-              {activeCitation.source_passage}
-            </p>
+            <div className="mt-4 rounded-lg bg-gray-50 p-4">
+              <p className="text-sm leading-relaxed text-gray-700">
+                {stripSectionPrefix(activeCitation.source_passage)}
+              </p>
+            </div>
             {activeCitation.url && (
               <a
                 href={activeCitation.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 block text-sm text-blue-600 hover:underline"
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
               >
-                View full document →
+                View full document
+                <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
               </a>
             )}
-            <button
-              type="button"
-              onClick={() => setActiveCitation(null)}
-              className="mt-4 rounded bg-gray-200 px-3 py-1.5 text-sm hover:bg-gray-300"
-            >
-              Close
-            </button>
           </div>
         </div>
       )}

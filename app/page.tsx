@@ -299,9 +299,13 @@ export default function Home() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="flex items-center gap-2 rounded-lg bg-gray-100 px-4 py-3">
-                    <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-blue-500" />
-                    <span className="text-sm text-gray-600">Generating…</span>
+                  <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
+                    <div className="flex gap-1">
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500 [animation-delay:-0.3s]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500 [animation-delay:-0.15s]" />
+                      <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500" />
+                    </div>
+                    <span className="text-sm text-gray-600">Generating response…</span>
                   </div>
                 </div>
               )}

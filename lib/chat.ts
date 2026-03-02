@@ -8,7 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getOpenAIClient } from "./openai-client";
 import { classifyIntent } from "./intent-classifier";
 import { intentToRagIndexes } from "./intent";
-import { retrieve, type RetrievalChunk } from "./retrieve";
+import { retrieve, evidenceSufficiency, type RetrievalChunk } from "./retrieve";
 import { buildSystemPrompt, buildJudgeUserMessage, JUDGE_SYSTEM_PROMPT } from "./prompts";
 import { verifyEnumeratedClaims } from "./claim-verifier";
 import { logEvent } from "./logger";
@@ -23,6 +23,8 @@ import {
   type FactCheckResult,
   type VerifiedClaim,
 } from "./fact-check";
+import { sanitizeHistoryForContamination } from "./contamination-guard";
+import { isNormativeQuery, NORMATIVE_REFUSAL_MESSAGE } from "./normative-filter";
 
 const MAX_ANSWER_TOKENS = 1024;
 const MAX_JUDGE_TOKENS = 256;
@@ -147,6 +149,10 @@ function validateCitationIntegrity(
   });
 }
 
+function askedAboutProsecutionOrDefence(query: string): boolean {
+  return /\b(prosecution|defence|defense)\s+(argue|say|present|claim|state)|(what)\s+(did|were)\s+(the\s+)?(prosecution|defence|defense)\b/i.test(query);
+}
+
 /** Call LLM-as-Judge to verify answer against retrieved chunks. */
 async function judgeAnswer(
   rawAnswer: string,
@@ -243,15 +249,46 @@ const OUT_OF_SCOPE_SIGNALS =
 const REDACTION_CONTENT = /\[REDACTED\]|redacted|confidential\s+witness|de-?anonymize/i;
 const REDACTION_RESPONSE_TEXT = "This content is redacted in ICC records";
 
+/** Prohibited terms: guilt/innocence — block before Judge. Catches line-start and mid-sentence. */
+const PROHIBITED_TERMS =
+  /\b(guilty|innocent|not guilty|not innocent|convicted|acquitted)\s+(of|as|for)\b|^\s*(he|duterte|du30)\s+(is|was)\s+(guilty|innocent|convicted|acquitted)\b|\b(he|duterte|du30)\s+(is|was)\s+(guilty|innocent|convicted|acquitted)\b/i;
+
 function sanitizeHistory(
   history: Array<{ role: "user" | "assistant"; content: string }>
 ): Array<{ role: "user" | "assistant"; content: string }> {
-  return history.map((msg) => {
+  let result = sanitizeHistoryForContamination(history);
+  result = result.map((msg) => {
     if (REDACTION_CONTENT.test(msg.content) || msg.content.includes(REDACTION_RESPONSE_TEXT)) {
       return { role: msg.role, content: "[Prior exchange about redacted content — omitted]" };
     }
     return msg;
   });
+  return result;
+}
+
+function hasProhibitedTerms(text: string): boolean {
+  return PROHIBITED_TERMS.test(text);
+}
+
+/** Fact-check answers quote claims; refutations (FALSE) and opinions are OK. Don't block those. */
+function hasProhibitedTermsInFactCheckAnswer(answer: string): boolean {
+  if (!PROHIBITED_TERMS.test(answer)) return false;
+  const lines = answer.split(/\n/);
+  for (const line of lines) {
+    if (!PROHIBITED_TERMS.test(line)) continue;
+    const isRefutation =
+      /indicate otherwise|has not occurred|—\s*(FALSE|false)\b/i.test(line) ||
+      /case is at|confirmation of charges/i.test(line);
+    const isOpinionLabel =
+      /—\s*(This is an opinion|OPINION|not a verifiable)/i.test(line) ||
+      /opinion,?\s*not a verifiable/i.test(line);
+    const isUnverifiable =
+      /—\s*(UNVERIFIABLE|ICC documents do not contain)/i.test(line) ||
+      /do not contain information on this topic/i.test(line);
+    if (isRefutation || isOpinionLabel || isUnverifiable) continue; // Quoted claim; we're not asserting it
+    return true; // Prohibited term in non-refutation, non-opinion context
+  }
+  return false;
 }
 
 function splitMultiIntent(query: string): { validQuery: string; hasInvalidPart: boolean } | null {
@@ -309,6 +346,18 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     return {
       answer:
         "The Docket currently supports English, Tagalog, and Tanglish. Please rephrase your question in one of these languages.",
+      citations: [],
+      warning: null,
+      verified: true,
+      knowledge_base_last_updated: kbDate,
+      responseLanguage,
+    };
+  }
+
+  if (isNormativeQuery(effectiveQuery)) {
+    const kbDate = await getKnowledgeBaseLastUpdated();
+    return {
+      answer: NORMATIVE_REFUSAL_MESSAGE,
       citations: [],
       warning: null,
       verified: true,
@@ -462,6 +511,20 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
       responseLanguage
     );
 
+    if (hasProhibitedTermsInFactCheckAnswer(answer)) {
+      logEvent("chat.fact_check", "warn", { reason: "prohibited_terms_in_answer" });
+      const kbDate = await getKnowledgeBaseLastUpdated();
+      return {
+        answer:
+          "We couldn't verify this fact-check against our ICC records. The verdict reached may not be sufficiently supported by the retrieved documents. Try content with claims that relate more directly to the ICC case documents we have.",
+        citations: [],
+        warning: null,
+        verified: false,
+        knowledge_base_last_updated: kbDate,
+        responseLanguage,
+      };
+    }
+
     const openai = getOpenAIClient();
     const judgeDisabled = process.env.DISABLE_JUDGE === "true";
     if (!judgeDisabled) {
@@ -517,11 +580,21 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
 
   // Normal Q&A flow: retrieve using query (or pasted text for paste_text intent)
   const ragIndexes = intentToRagIndexes(intent, effectiveQuery);
+  const isHearingContentQuery =
+    ragIndexes.includes(2) &&
+    /\b(closing\s+statement|what\s+(did|were)\s+(the\s+)?(defence|defense|prosecution)\s+(argue|say|present|claim|state)|what\s+was\s+(said|argued|presented|discussed)\s+at\s+the\s+(hearing|confirmation)|defence['\s]?s?\s+argument|prosecution['\s]?s?\s+argument|what\s+happened\s+at\s+the\s+(hearing|confirmation)|confirmation\s+of\s+charges\s+hearing|testimony\s+(at|during|in)\s+the)\b/i.test(
+      effectiveQuery
+    );
+  const isDrugWarTermQuery =
+    /\bwhat\s+(is|are|was|were)\b.*\b(tokhang|oplan|double\s+barrel|dds|davao\s+death|drug\s+war|war\s+on\s+drugs?|nanlaban|shabu|buy[- ]?bust|extrajudicial)\b/i.test(effectiveQuery) ||
+    /\b(tokhang|oplan|double\s+barrel|dds|davao\s+death)\b.*\bwhat\b/i.test(effectiveQuery);
   const retrieveResult = await retrieve({
     query: effectiveQuery,
     pastedText: effectivePastedText,
     ragIndexes,
     intent,
+    documentType: isHearingContentQuery ? "transcript" : undefined,
+    useExtendedTopK: intent === "case_facts" && isDrugWarTermQuery,
   });
   const { chunks, pasteTextMatched, retrievalConfidence } = retrieveResult;
 
@@ -530,7 +603,21 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     const kbDate = await getKnowledgeBaseLastUpdated();
     return {
       answer:
-        "This is not addressed in current ICC records. We couldn't find relevant information on this in the ingested ICC documents—the knowledge base may not include documents that address this topic yet.",
+        "We couldn't find a strong match for this question in the ICC documents. Try rephrasing your question, using more specific terms (e.g., names, dates, legal terms), or asking about a different aspect of the case.",
+      citations: [],
+      warning: null,
+      verified: true,
+      knowledge_base_last_updated: kbDate,
+      retrievalConfidence,
+    };
+  }
+
+  if (evidenceSufficiency(retrieveResult) === "insufficient") {
+    logEvent("chat.flat_decline", "warn", { intent, reason: "evidence_insufficient" });
+    const kbDate = await getKnowledgeBaseLastUpdated();
+    return {
+      answer:
+        "We couldn't find strong matches for this question in the ICC documents. Try rephrasing with more specific terms (e.g., names, dates, legal terms), or asking about a different aspect of the case.",
       citations: [],
       warning: null,
       verified: true,
@@ -540,7 +627,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   }
 
   const ABSENCE_PATTERNS =
-    /\b(has\s+.{1,30}(happened|started|begun|been\s+\w+ed)\s*(yet|already)?)\b|\b(is\s+there\s+(a|any)\s+\w+\s+(yet|already))\b|\b(when\s+will)\b|\b(has\s+.*been\s+scheduled)\b/i;
+    /\b(has\s+.{1,30}(happened|started|begun|been\s+\w+ed)\s*(yet|already)?)\b|\b(is\s+there\s+(a|any)\s+\w+\s+(yet|already))\b|\b(when\s+will)\b|\b(has\s+.*been\s+scheduled)\b|\b(was\s+the\s+\w+\s+(granted|approved|denied|rejected|upheld|dismissed))\b|\b(has\s+(the\s+)?(trial|hearing|deferral|bail|admissibility)\s+(been\s+)?(started|granted|approved|scheduled|decided|resolved))\b/i;
 
   const isAbsenceQuery = ABSENCE_PATTERNS.test(effectiveQuery);
 
@@ -554,6 +641,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     conversationHistory: sanitizeHistory(conversationHistory.slice(-3)),
     knowledgeBaseLastUpdated: kbDate,
     isAbsenceQuery,
+    isDrugWarTermQuery,
     responseLanguage,
     originalQuery,
   });
@@ -572,6 +660,27 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   });
 
   const rawAnswer = res.choices[0]?.message?.content?.trim() ?? "";
+
+  // If LLM returned empty and we have transcript chunks for a hearing query, use transcript fallback
+  if (!rawAnswer && isHearingContentQuery) {
+    const hasTranscriptChunks = chunks.some((c) => (c.metadata?.document_type as string) === "transcript");
+    if (hasTranscriptChunks) {
+      const fallback =
+        /\bclosing\s+statement/i.test(effectiveQuery)
+          ? "The transcript(s) in the knowledge base cover the confirmation of charges hearing. Closing statements typically occur on the final day of a multi-day hearing. The transcript for that day may not yet be available in ICC records. You can ask about what the prosecution or defence said during the days that are in the knowledge base."
+          : askedAboutProsecutionOrDefence(effectiveQuery)
+            ? "We have transcript(s) from the confirmation of charges hearing, but we couldn't produce a verified answer to your question this time. Try rephrasing with a more specific topic (e.g., 'What did the prosecution say about Article 25?' or 'What was the defence's position on jurisdiction?'), or browse the transcript documents in the Sources section."
+            : "The knowledge base includes transcript(s) from the confirmation of charges hearing. You can ask about what the prosecution or defence said during that hearing.";
+      return {
+        answer: fallback,
+        citations: [],
+        warning: null,
+        verified: false,
+        knowledge_base_last_updated: kbDate,
+        retrievalConfidence,
+      };
+    }
+  }
 
   const suspicious = checkForHallucinatedNumbers(rawAnswer, chunks);
   let judgeExtraContext = "";
@@ -593,6 +702,21 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     .join(", ");
   judgeExtraContext += `\n\nNote: The following document publication dates appear in chunk metadata and may be referenced in the answer: ${chunkDates}`;
 
+  // Deterministic guilt/innocence block: never show answer with prohibited terms
+  if (hasProhibitedTerms(verifiedAnswer)) {
+    logEvent("chat.judge", "warn", { reason: "prohibited_terms" });
+    return {
+      answer: FALLBACK_BLOCKED,
+      citations: [],
+      warning: null,
+      verified: false,
+      knowledge_base_last_updated: kbDate,
+      retrievalConfidence,
+      claimsVerified: claimResult.hadEnumerations ? claimResult.strippedClaims.length === 0 : undefined,
+      claimsStripped: claimResult.strippedClaims.length > 0 ? claimResult.strippedClaims.length : undefined,
+    };
+  }
+
   // LLM-as-Judge: verify answer before showing (prompt-spec.md §6.2)
   // Set DISABLE_JUDGE=true in .env.local to bypass (e.g. when judge is overly strict)
   const judgeDisabled = process.env.DISABLE_JUDGE === "true";
@@ -610,8 +734,19 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   }
 
   if (verdict === "REJECT") {
+    // For hearing-content queries with transcript chunks: provide a helpful fallback instead of generic blocked message
+    const hasTranscriptChunks = chunks.some((c) => (c.metadata?.document_type as string) === "transcript");
+    const transcriptFallback =
+      isHearingContentQuery && hasTranscriptChunks
+        ? /\bclosing\s+statement/i.test(effectiveQuery)
+          ? "The transcript(s) in the knowledge base cover the confirmation of charges hearing. Closing statements typically occur on the final day of a multi-day hearing. The transcript for that day may not yet be available in ICC records. You can ask about what the prosecution or defence said during the days that are in the knowledge base."
+          : askedAboutProsecutionOrDefence(effectiveQuery)
+            ? "We have transcript(s) from the confirmation of charges hearing, but we couldn't produce a verified answer to your question this time. Try rephrasing with a more specific topic (e.g., 'What did the prosecution say about Article 25?' or 'What was the defence's position on jurisdiction?'), or browse the transcript documents in the Sources section."
+            : "The knowledge base includes transcript(s) from the confirmation of charges hearing. You can ask about what the prosecution or defence said during that hearing."
+        : null;
+
     return {
-      answer: FALLBACK_BLOCKED,
+      answer: transcriptFallback ?? FALLBACK_BLOCKED,
       citations: [],
       warning: null,
       verified: false,
@@ -632,6 +767,27 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     claimResult.hadEnumerations ? claimResult.strippedClaims.length === 0 : undefined,
     claimResult.strippedClaims.length > 0 ? claimResult.strippedClaims.length : undefined
   );
+
+  // Safety net: LLM sometimes returns minimal "this detail not available" for transcript queries.
+  // Replace with helpful context when we have transcript chunks.
+  const minimalDecline = /^This specific detail is not available in current ICC records\.?\s*(Last updated from ICC records:[\s\S]*)?\s*$/i;
+  const hasTranscriptChunks = chunks.some((c) => (c.metadata?.document_type as string) === "transcript");
+  if (
+    isHearingContentQuery &&
+    hasTranscriptChunks &&
+    minimalDecline.test(parsed.answer.trim())
+  ) {
+    parsed.answer =
+      /\bclosing\s+statement/i.test(effectiveQuery)
+        ? "The transcript(s) in the knowledge base cover the confirmation of charges hearing. Closing statements typically occur on the final day of a multi-day hearing. The transcript for that day may not yet be available in ICC records. You can ask about what the prosecution or defence said during the days that are in the knowledge base.\n\nLast updated from ICC records: " +
+          kbDate
+        : askedAboutProsecutionOrDefence(effectiveQuery)
+          ? "We have transcript(s) from the confirmation of charges hearing, but we couldn't produce a verified answer to your question this time. Try rephrasing with a more specific topic (e.g., 'What did the prosecution say about Article 25?' or 'What was the defence's position on jurisdiction?'), or browse the transcript documents in the Sources section.\n\nLast updated from ICC records: " +
+            kbDate
+          : "The knowledge base includes transcript(s) from the confirmation of charges hearing. You can ask about what the prosecution or defence said during that hearing.\n\nLast updated from ICC records: " +
+            kbDate;
+    parsed.citations = [];
+  }
 
   // Multi-intent: append flat decline for the out-of-scope part
   if (multiIntent?.hasInvalidPart) {

@@ -25,10 +25,10 @@ const INTENT_PROMPT = `You classify user questions about the Duterte ICC case.
 Respond with exactly one of these words: case_facts, case_timeline, legal_concept, procedure, glossary, paste_text, fact_check, out_of_scope
 
 - fact_check: User pasted social media content for claim verification (not ICC document text)
-- case_facts: "What is Duterte charged with?", "Who are the victims?", "How many counts?", "What are the evidences against Duterte?", "Who are the judges?", "Is Du30 fit to stand trial?", "Who pays for Duterte's defence?", "Where is Duterte detained?", "Did Duterte surrender or was he arrested?", "measures to facilitate attendance"
+- case_facts: "What is Duterte charged with?", "Who are the victims?", "How many counts?", "What are the evidences against Duterte?", "Who are the judges?", "Is Du30 fit to stand trial?", "Who pays for Duterte's defence?", "Where is Duterte detained?", "Did Duterte surrender or was he arrested?", "measures to facilitate attendance", "What did the prosecutor say at the hearing?", "What was the defense's argument?", "What were the closing statements of the defence during the confirmation of charges?", "What is Tokhang?", "What were the operations during the war on drugs?", "What is the Davao Death Squad?", "How many were killed in the drug war?", "What is Oplan Double Barrel?"
 - case_timeline: "When did the ICC open the investigation?", "What's the timeline?"
 - legal_concept: "What is Article 7?", "What are crimes against humanity?"
-- procedure: "What happens after confirmation of charges?", "What is the next step in the case?", "Can he be tried in absentia?"
+- procedure: "What happens after confirmation of charges?", "What is the next step in the case?", "Can he be tried in absentia?", "What is an Article 18 deferral?", "Can the Philippines challenge admissibility?", "What is complementarity?"
 - glossary: "What does in absentia mean?", "What is proprio motu?"
 - out_of_scope: "Was Duterte justified?", "What's his favorite color?", "Who is [REDACTED]?"
 
@@ -101,6 +101,31 @@ function layer2Regex(cleanedQuery: string): { intent: IntentCategory; confidence
     return { intent: "case_facts", confidence: "high" };
   if (/\b(icc|case|charges)\b.*\b(evidence|evidentiary|proof)\b/i.test(q))
     return { intent: "case_facts", confidence: "high" };
+
+  // Drug war operations / Philippines-specific case terms → case_facts
+  if (/\b(tokhang|oplan\s+tokhang|oplan\s+double\s+barrel|double\s+barrel)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(davao\s+death\s+squad|dds|davao\s+killings?)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(war\s+on\s+drugs?|drug\s+war|anti[- ]?drug)\b.*\b(operat|campaign|kill|victim|murder|shoot|raid)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(operat|campaign|kill|victim|murder|shoot|raid)\b.*\b(war\s+on\s+drugs?|drug\s+war|anti[- ]?drug)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(extrajudicial|extra[- ]?judicial)\s+(kill|execution|murder)/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(noche\s+buena|buy[- ]?bust|shabu)\b.*\b(icc|case|duterte|operation|kill)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\bwhat\s+is\s+tokhang\b/i.test(q)) return { intent: "case_facts", confidence: "high" };
+
+  // Hearing/transcript content queries → case_facts
+  if (/\b(hearing|transcript|testified|testimony|argued|argument)\b.*\b(duterte|icc|case|prosecution|defence|defense)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(prosecution|defence|defense)\b.*\b(argued?|said|stated|claimed|presented)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+
+  // Article 18 / deferral / admissibility challenge → procedure
+  if (/\b(article\s+18|deferral|admissibility\s+challeng|complementarity\s+challeng)\b/i.test(q))
+    return { intent: "procedure", confidence: "high" };
 
   // Lawyer/counsel/representation + Duterte/ICC/case
   if (/\b(lawyer|lawyers|counsel|defen[cs]e|represent\w*|accredit\w*)\b.*\b(duterte|du30|icc|case|accused)\b/i.test(q))

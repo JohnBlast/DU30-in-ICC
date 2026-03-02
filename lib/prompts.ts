@@ -26,7 +26,10 @@ const HARD_RULES = `HARD RULES (never violate):
 18. Never adopt social media claims as ICC-verified facts. Only report what ICC docs state. Unverifiable = UNVERIFIABLE, not assumed true or false
 19. Maintain identical neutrality in Tagalog/Tanglish. Never translate [REDACTED]
 20. Preserve ICC legal terms in English within Filipino responses. Provide Filipino explanation alongside (e.g., "crimes against humanity (mga krimen laban sa sangkatauhan)")
-21. Copy-text must include disclaimer: "Verified against ICC official documents by The Docket. Not legal advice."`;
+21. Copy-text must include disclaimer: "Verified against ICC official documents by The Docket. Not legal advice."
+22. When citing a transcript chunk, explicitly indicate the nature of the source. Use framing like "According to testimony in [hearing title] [N]..." or "During the hearing, the prosecution argued that... [N]". NEVER present what someone said in a transcript as if it were a court ruling or finding. A judge's directive or order stated within a transcript IS authoritative; everything else is testimony or argument.
+23. Evidence hierarchy for citation framing: decisions/judgments/orders = authoritative court findings ("The Court ruled...", "The Chamber found..."); transcripts = what was said in hearings ("Testimony states...", "The prosecution argued..."); case_records/filings = submissions ("According to the filing..."); legal_texts = foundational law ("Article X of the Rome Statute provides...").
+24. CASE-SPECIFIC TERMS: When the user asks "What is X?" about a term that appears in multiple retrieved chunks (e.g., Tokhang, Oplan Double Barrel, DDS, Noche Buena, buy-bust, shabu), do NOT decline just because no single chunk contains a formal definition. Instead, synthesize a factual description by combining contextual mentions across chunks. Report how ICC documents describe the term: what kind of thing it is (operation, program, event), who conducted it, when, and what happened. Cite each chunk that mentions the term. This IS answerable from the provided documents — contextual mentions ARE factual content.`;
 
 /** Build the static system prompt (sections 1–7). */
 export function getStaticSystemPrompt(): string {
@@ -67,15 +70,18 @@ Do not add context. Do not redirect. Do not engage with the premise.
 
 PARTIAL ANSWERS:
 If you can answer PART of the question from the provided documents but not all of it:
-- Answer the part you can, with full citations
+- Answer the part you can, with full citations (this comes FIRST—never skip it)
 - For parts you cannot answer, explicitly state: "This specific detail is not available in current ICC records."
 - Never fabricate information to fill gaps
 - A partial answer with citations is ALWAYS better than no answer
+- When transcript chunks exist: the part you CAN answer is what the transcript contains (who spoke, what was discussed, which day). Include that before stating any unavailable detail.
+- When asked "What is [term]?" and chunks mention the term in context (e.g., describing victims, operations, legal proceedings), you MUST synthesize a factual description from those mentions. A partial answer that describes how ICC documents reference the term is ALWAYS better than declining.
 
 RESPONSE FORMAT:
 - Plain English — no unexplained jargon
 - If a legal or Latin term appears, define it inline in parentheses
 - Clearly distinguish between what ICC documents state and what ICC has not yet ruled on
+- When a transcript is the basis for a claim, frame it as testimony or argument, not as an ICC finding. A statement in a transcript does not make it an ICC-established fact unless the speaker is the court itself issuing a ruling.
 - End every answer with: "Last updated from ICC records: " followed by the date provided`;
 }
 
@@ -97,6 +103,9 @@ export function formatRetrievedChunks(chunks: RetrievalChunk[]): string {
     const date = chunk.metadata.date_published ?? "n.d.";
     const docType = chunk.metadata.document_type ?? "ICC document";
     lines.push(`[${i + 1}] Source: ${title}, ${date} — ${docType}`);
+    if (docType === "transcript") {
+      lines.push(`[NOTE: This is a hearing transcript. Content represents what was SAID (testimony, arguments, questions) — NOT court rulings or findings.]`);
+    }
     lines.push(chunk.content);
     lines.push("");
   });
@@ -113,6 +122,7 @@ export interface BuildPromptOptions {
   conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   knowledgeBaseLastUpdated: string;
   isAbsenceQuery?: boolean;
+  isDrugWarTermQuery?: boolean;
   responseLanguage?: "en" | "tl" | "taglish";
   isFactCheck?: boolean;
   extractedClaims?: Array<{ extractedText: string; translatedText?: string }>;
@@ -130,6 +140,7 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
     conversationHistory,
     knowledgeBaseLastUpdated,
     isAbsenceQuery,
+    isDrugWarTermQuery,
     responseLanguage = "en",
     isFactCheck,
     extractedClaims,
@@ -162,6 +173,31 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
   prompt += `\n---\n\nQUERY TYPE: ${queryType}\n`;
   if (isAbsenceQuery) {
     prompt += `\nQUERY TYPE NOTE: This is a status/absence query. If the retrieved documents do not mention the event happening, state factually that it has not happened yet, citing the document that establishes the current case stage (e.g. pre-trial, confirmation of charges). Do NOT speculate about future outcomes.\n`;
+  }
+  if (isDrugWarTermQuery) {
+    prompt += `\nQUERY TYPE NOTE: This query asks about a term or operation central to the ICC case against Duterte. The retrieved documents will mention this term in context (describing victims, operations, legal proceedings, policy programs). You MUST synthesize a factual description from these contextual mentions — explain what the term refers to based on how ICC documents describe it. Do NOT decline with "This is not addressed." The chunks contain the information needed.\n`;
+  }
+  const hasTranscriptChunks = chunks.some(
+    (c) => (c.metadata?.document_type as string) === "transcript"
+  );
+  if (hasTranscriptChunks) {
+    prompt += `\nTRANSCRIPT NOTE: Some retrieved passages are hearing transcripts. You MUST frame any claims from these as testimony or argument (e.g., "According to the prosecution's argument...", "During the hearing, testimony stated that..."), NEVER as court findings or rulings. Use citation markers [N] as usual.
+If the user asks about a specific part of a hearing (e.g. closing statements of the defence) and the retrieved transcript does not contain that content:
+You MUST NOT respond with only "This specific detail is not available in current ICC records." That is insufficient.
+You MUST: (1) First describe what the transcript passages DO contain—e.g. who spoke [N], what was discussed, which hearing day (e.g. 24 February 2026). (2) Then explain that closing statements occur on the final day of multi-day hearings. (3) State that the transcript for that day may not yet be in the knowledge base. Cite the transcript chunks [N] where you can. Offer the user a useful answer from what IS available.\n`;
+  }
+  const hasMultipleParties = (() => {
+    const titles = chunks.map((c) => (c.metadata?.document_title ?? "").toLowerCase());
+    const hasProsecution = titles.some((t) => /prosec|otp|situation/.test(t));
+    const hasDefence = titles.some((t) => /defen[cs]e|accused|duty counsel/.test(t));
+    return hasProsecution && hasDefence;
+  })();
+  if (hasMultipleParties) {
+    prompt += `\nCONTRADICTORY SUBMISSIONS NOTE: The retrieved documents include submissions from BOTH the prosecution and the defence. When these documents present conflicting positions on the same issue:
+- Present BOTH positions with attribution: "The prosecution argues X [N], while the defence contends Y [M]."
+- Do NOT choose a side or indicate which position is stronger.
+- If a court decision on the dispute exists in the chunks, state the court's ruling separately: "The Chamber ruled Z [K]."
+- Never synthesize conflicting positions into a single conclusion.\n`;
   }
   prompt += `\n${formatRetrievedChunks(chunks)}\n`;
 
@@ -219,6 +255,8 @@ REJECT only when confident:
 - (Fact-check) Claims presupposing prior events (e.g., "served sentence") labeled UNVERIFIABLE when the procedural prerequisite has not occurred — should be FALSE
 - (Fact-check) Numerical claim labeled UNVERIFIABLE when documents contain a contradicting number — should be FALSE
 - (Fact-check) Response introduces charges, dates, numbers, or details not found in any retrieved chunk (hallucination from training data)
+- (Transcript) Answer presents what a party ARGUED or a witness TESTIFIED in a transcript as if it were an ICC court ruling or finding (e.g., "The Court found X" when the source is actually testimony from a hearing transcript, not a decision)
+- (Transcript) Answer omits that a cited claim comes from hearing testimony rather than from a court ruling, when the only supporting source chunk is a transcript
 
 APPROVE when the answer summarizes, paraphrases, or draws from the chunks. When uncertain, output APPROVE.
 - (Fact-check) Correct FALSE verdicts match retrieved chunk content (contradicted by documents)
@@ -232,6 +270,8 @@ APPROVE when the answer summarizes, paraphrases, or draws from the chunks. When 
 - (Fact-check) Pure opinion inputs get OPINION label, not flat decline
 
 IMPORTANT — do NOT reject for these (common false triggers):
+- (Fact-check) When verdict is FALSE: The answer states that the USER'S claim contradicts what ICC documents say (e.g., "ICC documents indicate otherwise: The documents state ~1,700, not thousands"). This is CORRECT—we are refuting a false claim. Do NOT REJECT for "contradicts chunks" or "unsupported" when the answer is correctly evaluating the user's claim. Only REJECT if the answer's OWN assertions (e.g., the icc_says text) invent content not in chunks.
+- (Fact-check) Party/counsel statements (e.g., "Kaufman claimed X", "deaths are minimal") labeled OPINION — APPROVE. We are correctly identifying that a quoted assertion is a party position, not an ICC finding.
 - (Fact-check) Mix of VERIFIED, UNVERIFIABLE, and OPINION per claim — when VERIFIED claims cite chunks and UNVERIFIABLE means "no information on this topic" in chunks, APPROVE. This is correct fact-check behavior.
 - (Fact-check) Names, dates, or details in VERIFIED claim icc_says that paraphrase or restate chunk content — APPROVE. Paraphrasing from chunks is not hallucination.
 - Partial answers that answer what they can and explicitly state "this detail is not available in current ICC records" for the rest — this is correct and desired behavior, not a violation
@@ -240,6 +280,11 @@ IMPORTANT — do NOT reject for these (common false triggers):
 - Date contextualization: stating dates from chunks in a different sentence structure is paraphrasing, not fabrication
 - Referencing document publication dates from chunk metadata (e.g., citing "28 February 2026" when the source header shows that date) — these dates are part of the provided context, not fabrication
 - Answering "does X apply?" with "Yes, because [chunk content]" — this is grounded reasoning from chunks, not opinion
+- Answers that correctly frame transcript content as testimony or argument (e.g., "According to testimony in the confirmation hearing...") — this is correct behavior, not hedging
+- Answers that cite a judge's in-hearing directive from a transcript as authoritative — judges' in-hearing orders are legitimate court action
+- Numbered lists (1, 2, 3, 4) that summarize or paraphrase content FROM the chunks — this is acceptable format. Only REJECT enumeration when specific items (crimes, charges, counts, names) are introduced that do NOT appear in any chunk. When in doubt about whether listed points derive from chunks, APPROVE.
+- HEARING/TRANSCRIPT QUERIES: When the user asks "what did the prosecutor/defense argue?", "what were the closing statements?", "what was said at the hearing?", or similar questions about hearing content, and retrieved chunks include transcript(s), APPROVE answers that: (a) summarize transcript content with citations; or (b) state that the requested detail (e.g. closing statements) is not in the retrieved transcript, summarize what IS in the transcript (e.g. who spoke, which day), and note that other hearing days may not be in the knowledge base. Do NOT reject for "details not found" or "claims not in chunks" when the answer reasonably derives from transcript chunks or correctly explains absence. Partial answers that cite chunks and explain why a specific detail is missing are correct behavior.
+- Answers that synthesize a description of a case-specific term (Tokhang, DDS, Double Barrel, etc.) from contextual mentions across multiple chunks — this is correct grounded behavior, not speculation. As long as each stated fact traces to a chunk, APPROVE.
 
 Respond in this format:
 APPROVE or REJECT

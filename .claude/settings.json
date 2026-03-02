@@ -7,7 +7,9 @@
       "Bash(xargs ls -lh)",
       "Bash(wc -l '/Users/John/Project ICC - DU30/lib'/*.ts)",
       "Bash(python3 -c \":*)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "WebFetch(domain:www.icc-cpi.int)",
+      "Bash(npx tsx --env-file=.env.local scripts/check-retrieval.ts \"What were the operations during the war on drugs?\")"
     ],
     "additionalDirectories": [
       "/Users/John/Project ICC - DU30"

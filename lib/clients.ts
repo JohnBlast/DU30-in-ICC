@@ -71,3 +71,14 @@ export function createRag2Splitter() {
     chunkOverlap: 40 * CHARS_PER_TOKEN,
   });
 }
+
+/**
+ * Create a LangChain text splitter for transcripts (~800 tokens / 80 overlap).
+ * Transcripts need more context per chunk.
+ */
+export function createTranscriptSplitter() {
+  return new RecursiveCharacterTextSplitter({
+    chunkSize: 3200,
+    chunkOverlap: 320,
+  });
+}

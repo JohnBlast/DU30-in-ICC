@@ -8,13 +8,19 @@ import type { DetectedLanguage } from "./language-detect";
 import type { RetrievalChunk } from "./retrieve";
 import { getOpenAIClient } from "./openai-client";
 import { logEvent } from "./logger";
+import { isProcedurallyImpossible, getProceduralState } from "./procedural-state";
+import { enforceAttributionVerification } from "./attribution-verifier";
+import { requireAllegationFraming, getSourceAllegationStatus } from "./allegation-distinction";
+import { formatVerdictForUser } from "./verdict-tone";
+import { deterministicStrip } from "./deterministic-strip";
 
 export type ClaimVerdict =
   | "verified"
   | "false"
   | "unverifiable"
   | "not_in_icc_records"
-  | "opinion";
+  | "opinion"
+  | "mixed"; // Overall only: some verified, some unverifiable
 
 export interface ExtractedClaim {
   extractedText: string;
@@ -46,7 +52,7 @@ export interface FactCheckResult {
 
 /** ICC-related terms that indicate extractable factual content */
 const ICC_CLAIM_INDICATORS =
-  /\b(count|charges?|davao|warrant|murders?|crimes?\s+against\s+humanity|icc|rome\s+statute|arrest|confirmation\s+of\s+charges|davao\s+death\s+squad|allegation)/i;
+  /\b(count|charges?|davao|warrant|murders?|crimes?\s+against\s+humanity|icc|rome\s+statute|arrest|confirmation\s+of\s+charges|davao\s+death\s+squad|allegation|deferral|complementarity|admissibility|article\s+18|tokhang|oplan|drug\s+war|extrajudicial|bail|adjournment|interim\s+release|surrender)\b/i;
 
 /** Claim extraction system prompt — V2 with stripping and decomposition rules */
 const CLAIM_EXTRACTION_SYSTEM = `You extract, decompose, and classify statements from content about the Duterte ICC case.
@@ -89,6 +95,8 @@ CLASSIFICATION RULES:
 - "The ICC is biased" → OPINION (evaluative)
 - Rhetorical questions ("How dare they?") → OPINION
 - Predictions ("He will be convicted") → OPINION
+- Drug war operational claims ARE extracted as FACTUAL_CLAIM: "Tokhang killed 30,000" → FACTUAL_CLAIM. "The drug war was state-sponsored" → FACTUAL_CLAIM (verifiable against ICC findings)
+- Defence motion claims ARE extracted as FACTUAL_CLAIM: "The Philippines challenged admissibility" → FACTUAL_CLAIM. "The deferral was granted" → FACTUAL_CLAIM
 - Preserve specific numbers and dates exactly
 - CRITICAL: NEVER return NO_CLAIMS if content mentions charges, counts, warrant, ICC, conviction, guilty, arrest, or any ICC proceeding. Such content ALWAYS contains extractable claims.
 
@@ -166,14 +174,21 @@ function normalizeClaimForVerification(claim: string): string {
   return c;
 }
 
-/** Detect fabricated ICC filing references not present in retrieved chunks */
-const ICC_REFERENCE_PATTERN = /ICC-\d{2}\/\d{2}-\d{2}\/\d{2}[^\s,.)]*|No\.\s*ICC-[^\s,.)]+/gi;
+/** Detect fabricated ICC filing references not present in retrieved chunks (docket-improvement-plan §12) */
+const ICC_REF_PATTERNS = [
+  /ICC-\d{2}\/\d{2}-\d{2}\/\d{2}[^\s,.)]*/gi,
+  /No\.\s*ICC-[^\s,.)]+/gi,
+  /ICC\/\d{2}[-\s]?\d{2}[-\s]?\d{2}[^\s,.)]*/gi,
+  /document\s+ICC[-\s]?\d+[^\s,.)]*/gi,
+];
 
 function hasFabricatedReference(claim: string, chunks: RetrievalChunk[]): boolean {
-  const refs = claim.match(ICC_REFERENCE_PATTERN);
-  if (!refs || refs.length === 0) return false;
   const chunkText = chunks.map((c) => c.content).join(" ");
-  return refs.some((ref) => !chunkText.includes(ref));
+  for (const p of ICC_REF_PATTERNS) {
+    const refs = claim.match(p);
+    if (refs?.length && refs.some((ref) => !chunkText.includes(ref))) return true;
+  }
+  return false;
 }
 
 /** Validate parsed verification output — ensure enum and required fields conform */
@@ -200,10 +215,14 @@ function buildFactCheckPrompt(
   responseLanguage: string
 ): string {
   const chunksSection = chunks
-    .map(
-      (c, i) =>
-        `[${i + 1}] Source: ${c.metadata.document_title ?? "Unknown"}, ${c.metadata.date_published ?? "n.d."} — ${c.metadata.document_type ?? "ICC document"}\n${c.content}`
-    )
+    .map((c, i) => {
+      const docType = c.metadata.document_type ?? "ICC document";
+      const transcriptNote =
+        docType === "transcript"
+          ? `\n[NOTE: TRANSCRIPT — content is testimony/argument, NOT a court ruling]`
+          : "";
+      return `[${i + 1}] Source: ${c.metadata.document_title ?? "Unknown"}, ${c.metadata.date_published ?? "n.d."} — ${docType}${transcriptNote}\n${c.content}`;
+    })
     .join("\n\n");
 
   const claimsList = claims.map((c, i) => `${i + 1}. "${c.extractedText}"`).join("\n");
@@ -242,6 +261,7 @@ Use UNVERIFIABLE when documents are SILENT (no information at all):
 
 PROCEDURAL STAGE REFERENCE:
 ICC cases follow this sequence: preliminary examination → investigation → arrest warrant → surrender/arrest → confirmation of charges → trial → verdict → sentencing → appeal.
+Interlocutory appeals (e.g., Article 18 admissibility challenges, jurisdictional objections) can occur DURING the investigation or pre-trial phases — they do NOT follow the linear sequence above. A deferral request or admissibility challenge is a procedural event within a phase, not a separate phase. If a claim asserts that a deferral was "granted" or "upheld" but the documents show it was rejected, the verdict is FALSE.
 Determine the CURRENT stage from the documents below. If a claim asserts that an event from a LATER stage has occurred, the verdict is FALSE — the procedural sequence means it cannot have happened yet.
 Example: If documents show the case is at "confirmation of charges," then claims about trial, conviction, sentencing, or appeal are all FALSE.
 
@@ -263,6 +283,19 @@ GROUNDING:
 - Do NOT introduce facts from your training data — no charges, dates, names, or numbers that don't appear in the documents below
 - If you are unsure whether a detail is in the documents, re-read them before answering
 
+TRANSCRIPT vs. RULING DISTINCTION:
+Some ICC documents below are hearing transcripts (marked "— transcript" in source header). Transcript content represents:
+- What a prosecutor ARGUED (not what the court ruled)
+- What a defense counsel CLAIMED (not what the court found)
+- What a witness TESTIFIED (not established ICC fact)
+- What a judge SAID in a hearing (can be authoritative if it is a ruling or order)
+
+When verifying claims using transcript sources:
+- If the only supporting chunks are transcripts, the claim may still be VERIFIED, but your icc_says field MUST note: "Based on [party]'s testimony/argument in the hearing — not a court ruling."
+- If a claim asserts a court RULING or FINDING but the only source is transcript testimony (not a decision or order), use UNVERIFIABLE with icc_says: "This was argued/stated in a hearing, but no court ruling confirming this was found in retrieved documents."
+- If a decision/order document contradicts what was stated in a transcript, the decision/order governs — use FALSE.
+- Never treat what a party argued in a transcript as equivalent to what the court decided.
+
 ${langNote}
 
 ICC DOCUMENTS:
@@ -282,7 +315,7 @@ Respond in valid JSON format with per-claim verdicts only. Do NOT include an ove
       "verdict": "VERIFIED|FALSE|UNVERIFIABLE|NOT_IN_ICC_RECORDS",
       "icc_says": "[what ICC documents state — one or two sentences. For FALSE verdicts, state what the documents actually say. For UNVERIFIABLE, state that documents contain no information on this topic.]",
       "citation_markers": ["[1]"],
-      "evidence_type": "procedural_status|case_fact|legal_framework|timeline|numerical"
+      "evidence_type": "procedural_status|case_fact|legal_framework|timeline|numerical|transcript_testimony"
     }
   ],
   "citations": [
@@ -297,13 +330,20 @@ Respond in valid JSON format with per-claim verdicts only. Do NOT include an ove
 IMPORTANT: Output ONLY valid JSON. No text before or after the JSON object.`;
 }
 
+/** Verdict aggregation (docket-improvement-plan §14). Mixed when some verified, some unverifiable. */
 function computeOverallVerdict(claims: VerifiedClaim[]): ClaimVerdict {
   const verdicts = claims.map((c) => c.verdict);
   const factualVerdicts = verdicts.filter((v) => v !== "opinion");
 
   if (factualVerdicts.length === 0) return "opinion";
   if (factualVerdicts.includes("false")) return "false";
+  if (factualVerdicts.includes("not_in_icc_records") && !factualVerdicts.includes("false"))
+    return "not_in_icc_records";
   if (factualVerdicts.every((v) => v === "verified")) return "verified";
+  const verifiedCount = factualVerdicts.filter((v) => v === "verified").length;
+  const unverifiableCount = factualVerdicts.filter((v) => v === "unverifiable").length;
+  if (verifiedCount > 0 && unverifiableCount > 0) return "mixed";
+  if (verifiedCount > 0) return "verified";
   return "unverifiable";
 }
 
@@ -314,16 +354,35 @@ function normalizeVerdict(v: string): ClaimVerdict {
   if (normalized === "misleading") return "false";
   if (normalized === "partially_verified") return "unverifiable";
   if (normalized === "out_of_scope") return "opinion";
-  const valid: ClaimVerdict[] = ["verified", "false", "unverifiable", "not_in_icc_records", "opinion"];
+  const valid: ClaimVerdict[] = ["verified", "false", "unverifiable", "not_in_icc_records", "opinion", "mixed"];
   return valid.includes(normalized as ClaimVerdict) ? (normalized as ClaimVerdict) : "unverifiable";
 }
 
 /**
  * Extract and classify claims from pasted content.
  */
+/** D1: Decompose comma/and lists (e.g. "charged with X, Y, and Z" → 3 claims) */
+function decomposeCommaList(claim: ExtractedClaim): ExtractedClaim[] {
+  if (claim.claimType !== "factual_claim") return [claim];
+  const listMatch = claim.extractedText.match(/^((?:charged with|accused of|including)\s+)(.+)$/i);
+  if (!listMatch) return [claim];
+  const prefix = listMatch[1];
+  const items = listMatch[2].split(/\s*,\s*|\s+and\s+/i).map((s) => s.trim()).filter(Boolean);
+  if (items.length < 2) return [claim];
+  return items.map((item) => ({ ...claim, extractedText: `${prefix}${item}` }));
+}
+
+/** Hypothetical/prediction → OPINION (if/when X happens) */
+const HYPOTHETICAL_PATTERN = /^(if|when|once)\s+.+\s+(happens?|occurs?|begins?|starts?|will)/i;
+function isHypotheticalClaim(text: string): boolean {
+  return HYPOTHETICAL_PATTERN.test(text) || /\b(will be|would be)\s+(convicted|sentenced|acquitted)\b/i.test(text);
+}
+
 export async function extractClaims(pastedText: string): Promise<ExtractedClaim[]> {
-  const text = (pastedText || "").trim().slice(0, 3000);
+  let text = (pastedText || "").trim().slice(0, 3000);
   if (!text) return [];
+
+  text = deterministicStrip(text);
 
   const userMessage = `Pasted content to extract claims from:
 
@@ -369,7 +428,12 @@ Extract and classify statements from the content above.`;
       const oosMatch = line.match(/^OUT_OF_SCOPE:\s*(.+)/i);
 
       if (factualMatch) {
-        claims.push({ extractedText: factualMatch[1].trim(), claimType: "factual_claim" });
+        const extracted = factualMatch[1].trim();
+        if (isHypotheticalClaim(extracted)) {
+          claims.push({ extractedText: extracted, claimType: "opinion" });
+        } else {
+          claims.push({ extractedText: extracted, claimType: "factual_claim" });
+        }
       } else if (opinionMatch) {
         claims.push({ extractedText: opinionMatch[1].trim(), claimType: "opinion" });
       } else if (oosMatch) {
@@ -382,7 +446,7 @@ Extract and classify statements from the content above.`;
       }
     }
 
-    let result = claims.slice(0, 5);
+    let result = claims.flatMap(decomposeCommaList).slice(0, 5);
 
     if (result.length === 0 && ICC_CLAIM_INDICATORS.test(text)) {
       const fallback = text
@@ -522,10 +586,35 @@ export async function generateFactCheckResponse(
       }
     }
 
+    const procState = getProceduralState();
     for (const fv of factualVerified) {
       if (hasFabricatedReference(fv.extractedText, chunks) && fv.verdict !== "false") {
         fv.verdict = "not_in_icc_records";
         fv.iccSays = "This filing reference does not appear in retrieved ICC documents.";
+      } else {
+        const procCheck = isProcedurallyImpossible(fv.extractedText, procState);
+        if (procCheck.impossible && procCheck.claimedStage) {
+          fv.verdict = "false";
+          fv.iccSays = `The case is at ${procState.currentStage}. ${procCheck.claimedStage?.replace(/_/g, " ")} has not occurred.`;
+        }
+      }
+      fv.verdict = enforceAttributionVerification(
+        fv.extractedText,
+        fv.verdict,
+        fv.citationMarker,
+        chunks
+      ) as ClaimVerdict;
+      if (fv.verdict === "verified" && fv.citationMarker && fv.iccSays) {
+        const citedNums = [...fv.citationMarker.matchAll(/\[(\d+)\]/g)].map((m) => parseInt(m[1], 10));
+        for (const idx of citedNums) {
+          if (idx >= 1 && idx <= chunks.length) {
+            const chunk = chunks[idx - 1];
+            if (getSourceAllegationStatus(chunk) === "allegation") {
+              fv.iccSays = requireAllegationFraming(fv.iccSays, chunk);
+              break; // Apply framing once from first allegation-type chunk
+            }
+          }
+        }
       }
     }
 
@@ -563,17 +652,20 @@ export async function generateFactCheckResponse(
 
   factCheck.copyText = formatCopyText(factCheck);
 
-  const verdictLabel = overallVerdict.toUpperCase().replace(/_/g, " ");
+  const verdictLabel =
+    overallVerdict === "mixed"
+      ? "MIXED (some claims verified, others could not be verified from ICC documents)"
+      : overallVerdict.toUpperCase().replace(/_/g, " ");
   let answer = `VERDICT: ${verdictLabel}\n\n`;
   for (const c of verifiedClaims) {
-    const v = c.verdict.toUpperCase().replace(/_/g, " ");
     if (c.verdict === "opinion" && c.evidenceType === "out_of_scope") {
       answer += `• "${c.extractedText}" — OUT OF SCOPE. Outside the Duterte ICC case.\n`;
     } else if (c.verdict === "opinion") {
-      answer += `• "${c.extractedText}" — OPINION. Not a verifiable factual claim.\n`;
+      answer += `• "${c.extractedText}" — ${formatVerdictForUser("opinion", null)}\n`;
     } else {
+      const phrased = formatVerdictForUser(c.verdict, c.iccSays);
       const cite = c.citationMarker?.trim();
-      answer += `• "${c.extractedText}" — ${v}. ICC documents state: ${c.iccSays ?? "N/A"}${cite ? ` ${cite}` : ""}\n`;
+      answer += `• "${c.extractedText}" — ${phrased}${cite ? ` ${cite}` : ""}\n`;
     }
   }
   answer += `\nLast updated from ICC records: ${new Date().toISOString().slice(0, 10)}`;
@@ -585,7 +677,10 @@ export async function generateFactCheckResponse(
  * Format copy-text for sharing (prompt-spec.md §6.4).
  */
 export function formatCopyText(factCheck: FactCheckResult): string {
-  const verdict = factCheck.overallVerdict.toUpperCase().replace(/_/g, " ");
+  const verdict =
+    factCheck.overallVerdict === "mixed"
+      ? "MIXED (some verified, some unverifiable)"
+      : factCheck.overallVerdict.toUpperCase().replace(/_/g, " ");
   const preview = factCheck.pastedContentPreview;
 
   const lines: string[] = [
@@ -597,13 +692,13 @@ export function formatCopyText(factCheck: FactCheckResult): string {
   ];
 
   for (const c of factCheck.claims) {
-    const v = c.verdict.toUpperCase().replace(/_/g, " ");
     if (c.verdict === "opinion" && c.evidenceType === "out_of_scope") {
       lines.push(`• "${c.extractedText}" — OUT OF SCOPE. Outside the Duterte ICC case.`);
     } else if (c.verdict === "opinion") {
-      lines.push(`• "${c.extractedText}" — OPINION. Not a verifiable factual claim.`);
+      lines.push(`• "${c.extractedText}" — ${formatVerdictForUser("opinion", null)}`);
     } else {
-      lines.push(`• "${c.extractedText}" — ${v}. ICC documents state: ${c.iccSays ?? "N/A"}`);
+      const phrased = formatVerdictForUser(c.verdict, c.iccSays);
+      lines.push(`• "${c.extractedText}" — ${phrased}`);
     }
   }
 

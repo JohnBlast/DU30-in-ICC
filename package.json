@@ -15,13 +15,19 @@
     "verify-guardrails": "tsx --env-file=.env.local scripts/verify-guardrails.ts",
     "verify-phase3": "tsx --env-file=.env.local scripts/verify-phase3.ts",
     "verify-phase4": "tsx --env-file=.env.local scripts/verify-phase4.ts",
+    "verify-retrieval-drift": "tsx --env-file=.env.local scripts/verify-retrieval-drift.ts",
+    "verify-adversarial-safeguards": "tsx --env-file=.env.local scripts/verify-adversarial-safeguards.ts",
     "verify-e2e": "tsx --env-file=.env.local scripts/verify-e2e.ts",
     "verify-nl-prompts": "tsx --env-file=.env.local scripts/verify-nl-prompts.ts",
     "verify-legal-questions": "tsx --env-file=.env.local scripts/verify-legal-questions.ts",
     "check-retrieval": "tsx --env-file=.env.local scripts/check-retrieval.ts",
+    "list-ingested": "tsx --env-file=.env.local scripts/list-ingested.ts",
+    "list-transcripts": "tsx --env-file=.env.local scripts/list-transcripts.ts",
+    "test-transcript-retrieval": "tsx --env-file=.env.local scripts/test-transcript-retrieval.ts",
     "ingest": "tsx --env-file=.env.local scripts/ingest.ts",
     "ingest:all": "tsx --env-file=.env.local scripts/ingest.ts --all",
-    "ingest:discover": "tsx --env-file=.env.local scripts/ingest.ts --discover"
+    "ingest:discover": "tsx --env-file=.env.local scripts/ingest.ts --discover",
+    "run-real-world-factchecks": "tsx --env-file=.env.local scripts/run-real-world-factchecks.ts"
   },
   "dependencies": {
     "@langchain/textsplitters": "^1.0.1",

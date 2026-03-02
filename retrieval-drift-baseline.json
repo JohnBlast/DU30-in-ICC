@@ -1,0 +1,87 @@
+{
+  "createdAt": "2026-03-02T18:54:04.073Z",
+  "entries": [
+    {
+      "query": "What is Duterte charged with?",
+      "intent": "case_facts",
+      "ragIndexes": [
+        2
+      ],
+      "expectedChunkIds": [
+        "84ca0644-eebd-4743-a346-0de2ded99d40",
+        "59282913-f1e4-4c0d-a6e8-87ed034ebb48",
+        "f6270198-9bc2-4279-bf8a-519ab3209b9d",
+        "565e4d99-7c76-49ec-b429-4479e1841799",
+        "c58edc61-8a4e-4289-ba7e-0282b6155807",
+        "1902248d-059e-4ad5-9bfb-5c9e3ddd8171"
+      ],
+      "critical": true,
+      "minOverlapRatio": 0.8
+    },
+    {
+      "query": "What is Tokhang?",
+      "intent": "case_facts",
+      "ragIndexes": [
+        1,
+        2
+      ],
+      "expectedChunkIds": [
+        "d907c92e-396e-43e0-98b7-7756fa05706f",
+        "7bb3f79e-0d55-44ca-a9e0-ac9b66855544",
+        "c29020cf-d019-4d27-8f7f-8306e444a0b6",
+        "b7480626-a5e3-45d2-97fc-a2ed9e8fd44b",
+        "54cfbfdb-b4c7-4914-a9d6-fe01ed9a6674",
+        "1c51c87a-b2c7-4d05-96a1-519fd8746829"
+      ],
+      "critical": true,
+      "minOverlapRatio": 0.8
+    },
+    {
+      "query": "When was the arrest warrant issued?",
+      "intent": "case_timeline",
+      "ragIndexes": [
+        2
+      ],
+      "expectedChunkIds": [
+        "ec5bae7e-7aa5-47bc-960a-73c88b161c41",
+        "32094bcd-a479-4d8d-abb3-b5fa3ccda4c7",
+        "214a3579-634a-4118-8a6c-6bd790ece909",
+        "e5b815fd-9512-41f2-b06c-6f48fcfc33ff"
+      ],
+      "critical": true,
+      "minOverlapRatio": 0.8
+    },
+    {
+      "query": "What did the prosecution argue?",
+      "intent": "case_facts",
+      "ragIndexes": [
+        2
+      ],
+      "expectedChunkIds": [
+        "48ff0519-de1a-42d4-a6b9-36749ac66ae5",
+        "6267fdbc-3230-4ec2-8b9c-0e5d614f8ec5",
+        "e769292e-b33a-4884-98c7-aae0026c7d97",
+        "36f160c7-72cd-47c1-bfca-9b9f7fe0d352",
+        "01ce3777-d78a-4d6b-826f-70d7d84ee214",
+        "3efb7ff8-7824-4af0-9e38-192395b4b140"
+      ],
+      "critical": true,
+      "minOverlapRatio": 0.8
+    },
+    {
+      "query": "What is Article 7 of the Rome Statute?",
+      "intent": "legal_concept",
+      "ragIndexes": [
+        1
+      ],
+      "expectedChunkIds": [
+        "0a41cd4e-aece-47fd-a1cc-5c7ec10c4376",
+        "d76ed434-a76a-4f35-bd38-08b87456fa9a",
+        "1336b824-c66c-43f5-9f4a-c9241c66cd0e",
+        "7e23bcaf-5135-4c31-9dfb-daa91a93b87d"
+      ],
+      "critical": false,
+      "minOverlapRatio": 0.6
+    }
+  ]
+}

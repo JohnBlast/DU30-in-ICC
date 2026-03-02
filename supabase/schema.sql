@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS icc_documents (
   document_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   title TEXT NOT NULL,
   url TEXT NOT NULL UNIQUE,
-  document_type TEXT NOT NULL CHECK (document_type IN ('case_record', 'press_release', 'legal_text', 'case_info_sheet')),
+  document_type TEXT NOT NULL CHECK (document_type IN ('case_record', 'press_release', 'legal_text', 'case_info_sheet', 'transcript')),
   date_published DATE,
   rag_index SMALLINT NOT NULL CHECK (rag_index IN (1, 2)),
   content_hash TEXT NOT NULL,
@@ -131,7 +131,8 @@ CREATE OR REPLACE FUNCTION match_document_chunks(
   query_embedding vector(1536),
   match_rag_index SMALLINT DEFAULT NULL,
   match_threshold FLOAT DEFAULT 0.68,
-  match_count INT DEFAULT 10
+  match_count INT DEFAULT 10,
+  match_document_type TEXT DEFAULT NULL
 )
 RETURNS TABLE (
   chunk_id UUID,
@@ -152,6 +153,7 @@ BEGIN
   JOIN icc_documents d ON dc.document_id = d.document_id
   WHERE
     (match_rag_index IS NULL OR d.rag_index = match_rag_index)
+    AND (match_document_type IS NULL OR d.document_type = match_document_type)
     AND (1 - (dc.embedding <=> query_embedding)) >= match_threshold
   ORDER BY dc.embedding <=> query_embedding
   LIMIT match_count;
@@ -171,7 +173,8 @@ CREATE INDEX IF NOT EXISTS idx_document_chunks_content_fts
 CREATE OR REPLACE FUNCTION search_document_chunks_fts(
   search_query TEXT,
   match_rag_index SMALLINT DEFAULT NULL,
-  match_count INT DEFAULT 10
+  match_count INT DEFAULT 10,
+  match_document_type TEXT DEFAULT NULL
 )
 RETURNS TABLE (
   chunk_id UUID,
@@ -180,19 +183,30 @@ RETURNS TABLE (
   metadata JSONB,
   rank REAL
 ) AS $$
+DECLARE
+  phrase_tsquery tsquery;
+  plain_tsquery tsquery;
 BEGIN
+  phrase_tsquery := phraseto_tsquery('english', search_query);
+  plain_tsquery := plainto_tsquery('english', search_query);
+
   RETURN QUERY
   SELECT
     dc.chunk_id,
     dc.document_id,
     dc.content,
     dc.metadata,
-    ts_rank(dc.content_tsv, plainto_tsquery('english', search_query)) AS rank
+    (CASE
+      WHEN dc.content_tsv @@ phrase_tsquery
+        THEN ts_rank(dc.content_tsv, phrase_tsquery) * 2.0
+      ELSE ts_rank(dc.content_tsv, plain_tsquery)
+    END)::real AS rank
   FROM document_chunks dc
   JOIN icc_documents d ON dc.document_id = d.document_id
   WHERE
-    dc.content_tsv @@ plainto_tsquery('english', search_query)
+    dc.content_tsv @@ plain_tsquery
     AND (match_rag_index IS NULL OR d.rag_index = match_rag_index)
+    AND (match_document_type IS NULL OR d.document_type = match_document_type)
   ORDER BY rank DESC
   LIMIT match_count;
 END;

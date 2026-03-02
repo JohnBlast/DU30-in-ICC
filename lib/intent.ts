@@ -98,6 +98,13 @@ function requiresDualIndex(intent: IntentCategory, query: string): boolean {
   if (/\b(withdr[ae]w\w*|withdrew)\b.*\b(case|duterte|icc|jurisdiction|rome\s+statute|invalidat\w*)\b/i.test(q)) return true;
   if (/\b(case|duterte|icc|jurisdiction|rome\s+statute)\b.*\b(withdr[ae]w\w*|withdrew)\b/i.test(q)) return true;
 
+  // Drug war / Philippines operational terms always need both indexes
+  if (/\b(tokhang|oplan|double\s+barrel|davao\s+death\s+squad|dds|war\s+on\s+drugs?|drug\s+war|extrajudicial|buy[- ]?bust|shabu)\b/i.test(q))
+    return true;
+
+  // Hearing/transcript queries need both indexes
+  if (/\b(hearing|transcript|testified|testimony)\b/i.test(q)) return true;
+
   return false;
 }
 

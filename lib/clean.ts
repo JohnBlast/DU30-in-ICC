@@ -202,9 +202,33 @@ function clean04OcrCorrections(text: string): string {
 }
 
 /**
+ * CLEAN-11: Strip transcript procedural boilerplate (transcripts only).
+ */
+function clean11StripTranscriptBoilerplate(text: string): string {
+  return text
+    .replace(/^(THE COURT OFFICER|COURT OFFICER|THE REGISTRAR|REGISTRAR|THE INTERPRETER|INTERPRETER):?\s*/gim, "")
+    .replace(/^\s*\d{1,2}:\d{2}:\d{2}\s*/gm, "")
+    .replace(/^\s*Page\s+\d+\s*$/gim, "")
+    .replace(/^\s*\d{1,3}\s{2,}/gm, "")
+    .replace(/\(Interpretation\)/gi, "")
+    .replace(/\(Status conference called to order\)/gi, "")
+    .replace(/\(The hearing (?:starts|resumes|adjourns) at [\d:]+\)/gi, "")
+    .replace(/\((?:Brief|Short) pause\)/gi, "");
+}
+
+/**
+ * CLEAN-12: Normalize whitespace.
+ */
+function clean12NormalizeWhitespace(text: string): string {
+  return text
+    .replace(/[ \t]+$/gm, "")
+    .replace(/\n{4,}/g, "\n\n\n");
+}
+
+/**
  * Run all cleaning rules in the specified order.
  */
-export function cleanDocumentContent(rawText: string, sourceType: SourceType): string {
+export function cleanDocumentContent(rawText: string, sourceType: SourceType, documentType?: string): string {
   let text = rawText;
   if (!text || text.trim().length === 0) return text;
 
@@ -247,6 +271,14 @@ export function cleanDocumentContent(rawText: string, sourceType: SourceType): s
 
   // Step 10: CLEAN-04
   text = clean04OcrCorrections(text);
+
+  // Step 11: CLEAN-11 (transcripts only)
+  if (documentType === "transcript") {
+    text = clean11StripTranscriptBoilerplate(text);
+  }
+
+  // Step 12: CLEAN-12 (always, must be last)
+  text = clean12NormalizeWhitespace(text);
 
   return text.trim();
 }

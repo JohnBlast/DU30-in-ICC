@@ -3,7 +3,7 @@
  * RAG 1 = Legal framework; RAG 2 = Case documents.
  */
 
-export type DocumentType = "case_record" | "press_release" | "legal_text" | "case_info_sheet";
+export type DocumentType = "case_record" | "press_release" | "legal_text" | "case_info_sheet" | "transcript";
 
 export interface IccUrlConfig {
   url: string;
@@ -100,6 +100,13 @@ export const ICC_URLS: IccUrlConfig[] = [
     documentType: "case_info_sheet",
     fullPage: true, // Q&A on confirmation hearing, judges, measures
   },
+  // Confirmation of charges hearing transcripts (Feb 2026)
+  {
+    url: "https://www.icc-cpi.int/court-record/icc-01/21-01/25-t-005-eng",
+    title: "Confirmation of charges hearing transcript (24 Feb 2026)",
+    ragIndex: 2,
+    documentType: "transcript",
+  },
 ];
 
 /** URLs for direct ingestion (excludes discovery page). */
@@ -109,3 +116,7 @@ export const ICC_INGESTION_URLS = ICC_URLS.filter((u) => !u.isDiscoveryPage);
 export const CASE_RECORDS_DISCOVERY_URL =
   ICC_URLS.find((u) => u.isDiscoveryPage)?.url ??
   "https://www.icc-cpi.int/case-records?f%5B0%5D=cr_case_code%3A1527";
+
+/** Case transcripts discovery URL (Duterte case 1527). */
+export const CASE_TRANSCRIPTS_DISCOVERY_URL =
+  "https://www.icc-cpi.int/case-transcripts?f%5B0%5D=cr_case_code%3A1527";
