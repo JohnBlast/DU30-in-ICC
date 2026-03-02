@@ -105,6 +105,18 @@ function requiresDualIndex(intent: IntentCategory, query: string): boolean {
   // Hearing/transcript queries need both indexes
   if (/\b(hearing|transcript|testified|testimony)\b/i.test(q)) return true;
 
+  // Rights + case/accused (cursor-false-decline-reduction P0-5)
+  if (/\b(rights?|entitle\w*|guarantee\w*)\b.*\b(duterte|accused|defendant|case|icc|trial)\b/i.test(q)) return true;
+  if (/\b(duterte|accused|defendant)\b.*\b(rights?|entitle\w*)\b/i.test(q)) return true;
+  if (/\b(admissib\w*|cooperat\w*|obligat\w*|surrend\w*|extraditi\w*)\b.*\b(philippines|duterte|case|icc)\b/i.test(q))
+    return true;
+  if (/\b(philippines|duterte|case)\b.*\b(admissib\w*|cooperat\w*|obligat\w*|surrend\w*|extraditi\w*)\b/i.test(q))
+    return true;
+  if (/\b(does|do|did|would|could|can)\b.*\b(apply|matter|affect|change|impact)\b.*\b(case|duterte|charges|icc)\b/i.test(q))
+    return true;
+  if (/\brule\s+\d+\b.*\b(duterte|case|icc|charges|hearing)\b/i.test(q)) return true;
+  if (/\b(duterte|case|icc|charges|hearing)\b.*\brule\s+\d+\b/i.test(q)) return true;
+
   return false;
 }
 

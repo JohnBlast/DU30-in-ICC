@@ -241,6 +241,8 @@ APPROVE the answer if:
 - Tone is neutral
 - Transcript/filing sources are properly framed as argument/testimony, not court findings
 - Synthesized descriptions from contextual mentions across chunks are acceptable
+- Partial answers that cite what IS available and explicitly state "This specific detail is not available in current ICC records" for gaps — APPROVE. The uncited "not available" sentence is a correct acknowledgment, not an unsupported claim.
+- Procedural status answers ("No verdict has been rendered", "The case is at the confirmation of charges stage") grounded in a cited chunk — APPROVE. These are factual statements about the absence of an event, not speculation.
 
 Err on the side of APPROVE. Default to APPROVE. Only REJECT if CERTAIN of a violation.
 

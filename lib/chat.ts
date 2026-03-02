@@ -27,6 +27,7 @@ import { sanitizeHistoryForContamination } from "./contamination-guard";
 import { isNormativeQuery, NORMATIVE_REFUSAL_MESSAGE } from "./normative-filter";
 import { runDeterministicJudge } from "./deterministic-judge";
 import { checkTranslationStability } from "./translation-stability";
+import { neutralizeQuery } from "./query-neutralizer";
 
 const MAX_ANSWER_TOKENS = 1024;
 const MAX_JUDGE_TOKENS = 256;
@@ -270,8 +271,25 @@ function sanitizeHistory(
   return result;
 }
 
-function hasProhibitedTerms(text: string): boolean {
-  return PROHIBITED_TERMS.test(text);
+const PROCEDURAL_STATUS_EXEMPT = [
+  /\b(has\s+)?not\s+been\s+(convicted|acquitted|sentenced|found\s+guilty)/i,
+  /\bwas\s+not\s+(convicted|acquitted|sentenced)/i,
+  /\bno\s+(verdict|conviction|acquittal|sentence)\s+(has\s+been|was)\s+(rendered|issued|handed\s+down)/i,
+  /\bcase\s+is\s+(at|currently\s+at|in\s+the)\s+/i,
+  /\b(has\s+not\s+yet|not\s+yet\s+been)\b/i,
+  /\bno\s+trial\s+has\b/i,
+];
+
+function hasProhibitedTermsInQA(answer: string): boolean {
+  if (!PROHIBITED_TERMS.test(answer)) return false;
+  const lines = answer.split(/\n/);
+  for (const line of lines) {
+    if (!PROHIBITED_TERMS.test(line)) continue;
+    const isExempt = PROCEDURAL_STATUS_EXEMPT.some((p) => p.test(line));
+    if (isExempt) continue;
+    return true;
+  }
+  return false;
 }
 
 /** Fact-check answers quote claims; refutations (FALSE) and opinions are OK. Don't block those. */
@@ -366,6 +384,8 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     };
   }
 
+  effectiveQuery = neutralizeQuery(effectiveQuery);
+
   if (isNormativeQuery(effectiveQuery)) {
     const kbDate = await getKnowledgeBaseLastUpdated();
     return {
@@ -384,7 +404,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     const kbDate = await getKnowledgeBaseLastUpdated();
     const answer = isRedaction
       ? "This content is redacted in ICC records. The Docket cannot investigate or disclose redacted material."
-      : "This is not addressed in current ICC records. Your question asks for opinions, speculation, or information outside the scope of ICC case documents—the Docket only answers from official records about the Philippines case.";
+      : "This is not addressed in current ICC records.";
     return {
       answer,
       citations: [],
@@ -625,7 +645,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   const { chunks, pasteTextMatched, retrievalConfidence } = retrieveResult;
 
   if (chunks.length === 0) {
-    logEvent("chat.flat_decline", "warn", { intent, reason: "chunks=0" });
+    logEvent("chat.retrieval_miss", "warn", { intent, reason: "chunks=0" });
     const kbDate = await getKnowledgeBaseLastUpdated();
     return {
       answer:
@@ -729,7 +749,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   judgeExtraContext += `\n\nNote: The following document publication dates appear in chunk metadata and may be referenced in the answer: ${chunkDates}`;
 
   // Deterministic guilt/innocence block: never show answer with prohibited terms
-  if (hasProhibitedTerms(verifiedAnswer)) {
+  if (hasProhibitedTermsInQA(verifiedAnswer)) {
     logEvent("chat.judge", "warn", { reason: "prohibited_terms" });
     return {
       answer: FALLBACK_BLOCKED,

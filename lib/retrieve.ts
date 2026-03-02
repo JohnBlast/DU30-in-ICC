@@ -71,8 +71,8 @@ export interface RetrieveResult {
 export function evidenceSufficiency(result: RetrieveResult): "sufficient" | "insufficient" {
   const { chunks, retrievalConfidence } = result;
   if (chunks.length === 0) return "insufficient";
-  if (chunks.length <= 1 && retrievalConfidence !== "high") return "insufficient";
-  if (retrievalConfidence === "low" && chunks.length < 3) return "insufficient";
+  if (chunks.length >= 2) return "sufficient";
+  if (chunks.length === 1 && retrievalConfidence === "low") return "insufficient";
   return "sufficient";
 }
 
@@ -211,7 +211,24 @@ function expandQueryForEmbedding(query: string): string {
   return query;
 }
 
-/** Expand query with ICC terminology synonyms for better FTS match (e.g. closing submissions vs closing statements). */
+const FTS_SYNONYMS: Record<string, string> = {
+  charges: "counts allegations indictment",
+  counts: "charges allegations",
+  allegations: "charges counts indictment",
+  detained: "held custody imprisoned arrested surrendered",
+  detention: "custody imprisoned held arrested",
+  arrested: "detained surrendered custody",
+  surrender: "surrendered arrested",
+  lawyer: "counsel defense representation",
+  counsel: "lawyer defense representation",
+  evidence: "evidentiary proof exhibits",
+  warrant: "arrest warrant apprehension",
+  judge: "judges chamber magistrate",
+  victims: "killed affected persons",
+  rights: "entitlements guarantees protections",
+};
+
+/** Expand query with ICC terminology synonyms for better FTS match. */
 function expandQueryForFts(query: string): string {
   let expanded = query;
   if (/\bclosing\s+statement(s)?\b/i.test(expanded) && !/\bclosing\s+submission/i.test(expanded)) {
@@ -219,6 +236,10 @@ function expandQueryForFts(query: string): string {
   }
   if (/\bdefence\b/i.test(expanded) && !/\bdefense\b/i.test(expanded)) {
     expanded += " defense";
+  }
+  for (const [term, synonyms] of Object.entries(FTS_SYNONYMS)) {
+    const re = new RegExp(`\\b${term}\\b`, "i");
+    if (re.test(expanded)) expanded += " " + synonyms;
   }
   // Drug war term expansion for better FTS recall
   if (/\btokhang\b/i.test(expanded)) {

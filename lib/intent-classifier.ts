@@ -148,6 +148,35 @@ function layer2Regex(cleanedQuery: string): { intent: IntentCategory; confidence
   if (/what\s+happens\s+after\s+(confirmation|charges)/i.test(q)) return { intent: "procedure", confidence: "high" };
   if (/\bhas\s+.{1,40}(been\s+convicted|trial\s+started|started\s+yet)\b/i.test(q)) return { intent: "case_facts", confidence: "high" };
 
+  // Standalone case-context questions (cursor-false-decline-reduction P0-3)
+  if (/\b(what|tell\s+me\s+about)\s+(are\s+)?(the\s+)?(charges?|counts?|allegations?|indictment)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(what|who)\s+(is|are|was|were)\s+(the\s+)?(judge|judges|magistrate|chamber)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(what|where)\s+(is|are|was|were)\s+(the\s+)?(status|current\s+status|latest|update)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (
+    /\b(is|has)\s+(there|he|duterte|du30)\s+(been\s+)?(a\s+)?(trial|verdict|sentence|hearing|arrested|detained|convicted|acquitted)\b/i.test(q)
+  )
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(what|tell\s+me\s+about)\s+(the\s+)?(evidence|proof|evidentiary)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(detain\w*|detention|in\s+custody|held\s+in|imprisoned)\b/i.test(q))
+    return { intent: "case_facts", confidence: "low" };
+  if (/\b(counsel|lawyer|represent\w*|legal\s+aid|legal\s+team)\b/i.test(q))
+    return { intent: "case_facts", confidence: "low" };
+  if (/\bwhat\s+happens\s+(after|if|when|once)\b/i.test(q))
+    return { intent: "procedure", confidence: "low" };
+  if (/\b(can|could)\s+(duterte|he|the\s+accused)\s+(be\s+)?(tried|sentenced|convicted|acquitted|released)\b/i.test(q))
+    return { intent: "procedure", confidence: "low" };
+  // Factual-procedural: normative filter lets these through; route to in-scope (cursor-false-decline FD-13, FD-14)
+  if (/\bis\s+(the\s+)?(case|investigation|prosecution)\s+(legitimate|admissible|valid)\b/i.test(q))
+    return { intent: "procedure", confidence: "high" };
+  if (/\b(should|must)\s+(duterte|he|the\s+accused)\s+(appear|attend|surrender|cooperate|comply)\b/i.test(q))
+    return { intent: "procedure", confidence: "high" };
+  if (/\bwhat\s+did\s+(duterte|du30|he)\s+do\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+
   // glossary / legal_concept (definition-style)
   if (/\b(define|what\s+does|what\s+is)\s+['"]?\w+['"]?\s+mean/i.test(q)) return { intent: "legal_concept", confidence: "high" };
   if (/\bdefine\s+\w+/i.test(q)) return { intent: "legal_concept", confidence: "high" };

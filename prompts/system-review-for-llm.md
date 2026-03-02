@@ -15,12 +15,13 @@
 7. [Retrieval Engine](#7-retrieval)
 8. [Known Issues & Areas for Review](#8-known-issues)
 9. [Recently Implemented (2026-03)](#9-recently-implemented)
+10. [Production Hardening Reference](#10-production-hardening-reference)
 
 ---
 
 ## 9. Recently Implemented (2026-03)
 
-This section documents improvements implemented from the docket-improvement-plan and real-world fact-check analysis. Current state as of 2026-03-02.
+This section documents improvements implemented from the docket-improvement-plan, real-world fact-check analysis, and production hardening blueprint. Current state as of 2026-03-02.
 
 ### 9.1 Procedural State & Case Awareness
 
@@ -31,29 +32,134 @@ This section documents improvements implemented from the docket-improvement-plan
 
 - **Deterministic stripping** (`lib/deterministic-strip.ts`): S-2, S-3, S-5, S-7 applied in code before LLM claim extraction. S-2 narrowed to exclude idiomatic "we say"/"they say" (Bisaya "nagpataka nalang" fix).
 - **Comma-list decomposition (D1)** (`lib/fact-check.ts`): "charged with X, Y, Z" split into separate claims before verification.
+- **Subordinate clause decomposition (D2)** (`lib/fact-check.ts`): "After being convicted, Duterte appealed" → 2 claims. Regex-based: `after/before/when/once/upon + clause, clause`. Minimum 15-char subclaims.
+- **Causal chain decomposition (D3)** (`lib/fact-check.ts`): "Since the ICC found him guilty, the Philippines must extradite him" → 2 claims. Regex-based: `since/because/as + clause, clause` and `clause so/therefore/thus clause`.
 - **Broader ICC_REF_PATTERNS** (`lib/fact-check.ts`): `ICC/xx-xx-xx`, `document ICC-nnn`, `No. ICC-…` patterns for fabricated reference detection.
 - **Allegation framing** (`lib/allegation-distinction.ts`): When any cited chunk is allegation-type (transcript/filing), icc_says gets allegation framing ("Based on [party]'s argument — not a court ruling"). Applied to all cited chunk indices.
 - **Verdict aggregation**: `computeOverallVerdict` returns `mixed` when some verified and some unverifiable. ChatMessage.tsx displays MIXED.
 - **Hypothetical detection** (`lib/fact-check.ts`): Claims matching `if/when/once … happens` or `will be/would be convicted` → classified as OPINION at extraction.
+- **Decomposition pipeline order**: `decomposeCommaList → decomposeSubordinate → decomposeCausalChain → slice(0, 5)`.
 
-### 9.3 Judge & Safety
+### 9.3 Judge & Safety — Two-Layer Architecture
 
-- **Judge fact-check clarifications** (`lib/prompts.ts`): (1) When verdict is FALSE, answer correctly refutes user claim — do NOT REJECT for "contradicts chunks." (2) Party/counsel statements ("Kaufman claimed X") labeled OPINION — APPROVE.
-- **PROHIBITED_TERMS** (`lib/chat.ts`): Added mid-sentence pattern `(he|duterte|du30) (is|was) (guilty|innocent|convicted|acquitted)`. Fact-check answers exempt: refutations (FALSE/indicate otherwise), OPINION labels, UNVERIFIABLE lines.
-- **Normative filter** (`lib/normative-filter.ts`): Added `what's your opinion`, `what's your take` to opinion-seeking patterns.
+- **Layer 1: Deterministic Judge** (`lib/deterministic-judge.ts`): Runs BEFORE the LLM Judge. Checks:
+  1. **Prohibited terms**: guilt/innocence (`he/duterte/du30 is/was guilty/innocent/convicted/acquitted`), loaded characterizations (`murderer/tyrant/hero/saint/villain`), politically loaded terms (`witch hunt/persecution/justice served`). Fact-check answers exempt when line contains FALSE/UNVERIFIABLE/OPINION refutation context.
+  2. **Citation bounds**: All `[N]` markers must reference valid chunk indices (1..chunks.length).
+  3. **Redaction content**: Answer must not reference `redacted name/person/witness/individual/identity`.
+  - If Layer 1 fails → immediate REJECT (no LLM call needed).
+- **Layer 2: Reduced-scope LLM Judge** (`lib/prompts.ts` — `JUDGE_SYSTEM_PROMPT`): Prompt reduced from ~2000 tokens to ~600 tokens. Only evaluates 4 conditions: (1) factual claims supported by chunks, (2) transcript/filing not presented as court ruling, (3) neutrality, (4) scope creep. Explicit note that prohibited terms, citation bounds, and redaction are handled separately.
+- **Judge model upgrade**: Judge uses `gpt-4o` (configurable via `JUDGE_MODEL` env var, default `gpt-4o`). Stronger reasoning reduces false rejections.
+- **Fact-check verification model upgrade**: Fact-check verification uses `gpt-4o` (configurable via `FACTCHECK_MODEL` env var, default `gpt-4o`). Improves FALSE vs UNVERIFIABLE distinction.
 
-### 9.4 Retrieval & Monitoring
+### 9.4 Attribution Verification Engine — Upgraded
+
+**File**: `lib/attribution-verifier.ts`
+
+Prevents VERIFIED for causal-attribution claims when chunks don't directly support the causal link.
+
+- **Expanded causal verb taxonomy**: 4 pattern groups covering direct verbs (`ordered/directed/authorized/commanded/instructed/oversaw/approved/sanctioned/endorsed/masterminded/orchestrated/initiated`), indirect responsibility (`bore responsibility for/was responsible for/presided over`), phrasal (`carried out under/at the direction of/on orders of`), and modes of liability (`aided and abetted/contributed to/facilitated/had effective command over`).
+- **3-sentence-window co-occurrence**: Instead of checking the entire ~1000-char chunk, requires actor + causal verb + harmful act to co-occur within a sliding 3-sentence window. Prevents stitching from unrelated paragraphs within the same chunk.
+- **Allegation-source compound check** (`isAllegationContextAttribution`): When a chunk supports causal attribution BUT the chunk is a transcript/filing AND the matching window contains allegation verbs (`alleges/argues/submits/contends/claims/according to the prosecution`), the verdict is downgraded from VERIFIED → UNVERIFIABLE. Prevents "prosecution alleges X" from becoming "X is verified."
+- **Integration**: Runs in `lib/fact-check.ts` after LLM verification, before verdict aggregation. Applied to every claim with VERIFIED verdict.
+
+### 9.5 Multi-Turn Contamination Guard — Upgraded
+
+**File**: `lib/contamination-guard.ts`
+
+Strips user-asserted facts from conversation history before generation and Judge evaluation.
+
+- **7 pattern categories**: (1) Numbers + casualties (`\d{3,} killed/died/victims`), (2) Standalone large numbers near drug war context, (3) Premise-framing (`given that/since/because + [factual assertion]`), (4) Source attributions (`according to/sources say/everyone knows`), (5) Actor + causal verb (`Duterte ordered/authorized/directed`), (6) Guilt/innocence assertions, (7) Existence claims with numbers (`there were/are/have been + \d{3,}`).
+- **Pipeline order**: `conversationHistory → sanitizeHistoryForContamination → sanitizeHistory (redaction) → buildSystemPrompt`.
+- Only user messages are transformed; assistant messages preserved.
+
+### 9.6 Normative Domain Filter — Upgraded
+
+**File**: `lib/normative-filter.ts`
+
+- **14 normative patterns** (expanded from 8): Added `objectively/honestly/realistically speaking + evaluative`, `would you agree/don't you think/isn't it true`, `is it a fact that + [evaluative term]`, `more/less effective/fair/biased than`, `how can the ICC justify/claim/pretend/dare`, `interference/meddling/neo-colonial/imperial + Philippine context`.
+- **5 factual-procedural exceptions** (expanded from 4): Added `did/does/has the defence/prosecution argue/claim/contend that` — allows questions about what parties argued without triggering normative rejection.
+- **Refusal message**: "This question asks for an evaluation or opinion. The Docket only answers factual questions from ICC documents."
+
+### 9.7 Translation Stability Audit
+
+**File**: `lib/translation-stability.ts`
+
+- **Logging-only check** after Filipino → English translation.
+- Compares Filipino modal markers (`maaari/dapat/pwede/siguro/baka/malamang/posible`) against English certainty markers (`will/shall/must/definitely/certainly + convicted/sentenced/charged/killed/arrested`).
+- If Filipino has uncertainty markers but English has certainty markers → logs `translation.stability_warning` with original and translated text.
+- Does not block or alter the response; builds corpus for future analysis.
+
+### 9.8 Domain Embedding Anchors
+
+**File**: `scripts/ingest-glossary.ts` — `npm run ingest-glossary`
+
+- **14 synthetic glossary chunks** ingested as embedding anchors for domain-specific vocabulary.
+- Terms covered: Oplan Tokhang, DDS/Davao Death Squad, Project Double Barrel, EJK/Extrajudicial Killings, Nanlaban, Salvaging, DCC, OPCV, OTP, Confirmation of Charges, Article 7, Article 15, Article 18/Complementarity, In Absentia.
+- Each chunk is ~200–400 words, rich in synonyms and related terms.
+- Stored as `document_type: "glossary"`, `rag_index: 2`.
+- **Purpose**: Creates high-similarity vector targets for queries like "What is Tokhang?" where `text-embedding-3-small` previously returned 0 vector results.
+
+### 9.9 Verdict Stability Tests
+
+**File**: `scripts/verify-verdict-stability.ts` — `npm run verify-verdict-stability`
+
+- **5 canonical fact-check tests** (VS-01 through VS-05):
+  - VS-01: "Duterte was convicted by the ICC" → expected FALSE
+  - VS-02: "Duterte is charged with three counts of crimes against humanity" → expected VERIFIED
+  - VS-03: "Duterte was charged with genocide" → expected FALSE
+  - VS-04: "The ICC issued an arrest warrant for Duterte" → expected VERIFIED
+  - VS-05: "Duterte was sentenced to life imprisonment" → expected FALSE
+- Each test runs the full pipeline (claim extraction → retrieval → verification) and checks verdict + key phrases.
+- Used as release gate: critical verdict regressions block deployment.
+
+### 9.10 Retrieval & Monitoring
 
 - **Dynamic top-k** (`lib/retrieve.ts`): 6 chunks for `case_facts` + drug war terms (vs default 4). `POST_RERANK_TOP_K_EXTENDED = 6`.
 - **Retrieval drift monitoring**: Migration `007_retrieval_drift_monitoring.sql`; script `npm run verify-retrieval-drift`; baseline `test-fixtures/retrieval-drift-baseline.json`.
-- **Adversarial safeguard tests**: `npm run verify-adversarial-safeguards` — 8 safeguard-specific tests.
+- **Adversarial safeguard tests**: `npm run verify-adversarial-safeguards` — 11 tests including SR-07/08/09 (negated-guilt blocks).
+- **False-decline verification**: `npm run verify-false-decline` — 14 tests for previously declined newcomer questions (FD-01 through FD-15 minus FD-12 if P1-2 not enabled).
 
-### 9.5 Data & Migrations
+### 9.13 False Decline Reduction (cursor-false-decline-reduction.md, 2026-03)
+
+**Query Neutralizer** (`lib/query-neutralizer.ts`):
+- Strips loaded descriptors (e.g. "that murderer Duterte") before classification and generation. Uses lookahead patterns to remove descriptors but preserve the person's name.
+- Called in `chat()` after translation, before normative filter and intent classification.
+
+**Confidence-aware evidence sufficiency** (`lib/retrieve.ts`):
+- `evidenceSufficiency()`: 0 chunks → insufficient; 1 chunk + low confidence → insufficient; 1 chunk + medium/high OR 2+ chunks → sufficient.
+- Allows focused single-chunk answers when primary search succeeded; blocks only when the single chunk came from deep fallback (0.30 threshold).
+
+**Intent regex patterns** (`lib/intent-classifier.ts` P0-3):
+- Charges/counts/allegations, judges, status, evidence, detained/counsel, "what happens after/if/when/once", "can he be tried/sentenced/convicted".
+- Factual-procedural patterns for "is the case legitimate?", "should Duterte appear", "what did Duterte do".
+
+**Q&A prohibited-term exemption** (`lib/chat.ts`):
+- `hasProhibitedTermsInQA()` exempts procedural-status lines (e.g. "has not been convicted", "no verdict has been rendered") from the guilt/innocence block.
+- Deterministic Judge (`lib/deterministic-judge.ts`): Negated-guilt patterns (`is not guilty`, `found not guilty`, `is not innocent`) are NEVER exempted; procedural-status phrasing gets `PROCEDURAL_STATUS_EXEMPT_DJ` exemption.
+
+**Dual-index routing** (`lib/intent.ts`):
+- Extended `requiresDualIndex()`: rights + case/accused, admissibility/cooperation/surrender/extraditi, "does X apply/matter/affect" + case terms, "rule N" + case context.
+
+**Decline vs retrieval-miss**:
+- Out-of-scope: exact flat decline "This is not addressed in current ICC records." (trimmed from longer text).
+- Retrieval miss (chunks=0 for in-scope query): helpful rephrase message; log event `chat.retrieval_miss` (distinct from `chat.flat_decline`).
+
+**Normative filter exceptions** (`lib/normative-filter.ts`):
+- Added: "is the case legitimate", "should Duterte appear/attend/surrender", "is the arrest warrant legitimate", "can the case be dismissed".
+
+**FTS synonym expansion** (`lib/retrieve.ts`):
+- Synonym map: charges↔counts↔allegations, detained↔arrested↔custody, lawyer↔counsel, evidence↔evidentiary, warrant, judge, victims, rights, etc.
+
+**Judge prompt** (`lib/prompts.ts`):
+- Partial answers with "This specific detail is not available in current ICC records" — APPROVE.
+- Procedural status answers ("No verdict has been rendered", "The case is at the confirmation of charges stage") grounded in cited chunk — APPROVE.
+
+### 9.11 Data & Migrations
 
 - **French duplicate removal** (`006_remove_french_duplicate.sql`): French Article 15(3) decision removed from KB.
 - **FTS rank type fix** (`005_fts_rank_type_fix.sql`): Proper ts_rank_cd for BM25-style scoring.
 
-### 9.6 Real-World Fact-Check Performance
+### 9.12 Real-World Fact-Check Performance
 
 **Script**: `npm run run-real-world-factchecks` (15 examples; reference source `test-fixtures/real-world-factchecks`)
 
@@ -74,7 +180,7 @@ Remaining blocks: Ex 10 (Tagalog opinion/fallback), Ex 11 (prosecutor waiver doc
 - **Frontend**: Next.js (React)
 - **Backend**: Next.js API routes (TypeScript)
 - **Database**: Supabase (PostgreSQL + pgvector)
-- **LLM**: OpenAI `gpt-4o-mini` (generation, classification, fact-checking, judging)
+- **LLM**: OpenAI `gpt-4o` (fact-check verification, Judge) + `gpt-4o-mini` (generation, classification, claim extraction, translation)
 - **Embeddings**: OpenAI `text-embedding-3-small` (1536 dimensions)
 - **Ingestion**: Firecrawl (PDF extraction) + LangChain (text splitting)
 
@@ -138,6 +244,7 @@ document_chunks:
 | `filing` | Party submissions, motions | Submissions — "According to the filing..." |
 | `legal_text` | Rome Statute, RPE, Elements of Crimes | Foundational law — "Article X provides..." |
 | `case_record` | DCC, warrants, other case documents | Case facts — cited normally |
+| `glossary` | Synthetic domain glossary (system-generated) | Embedding anchors — not cited directly; improves vector retrieval for domain terms |
 
 ---
 
@@ -229,7 +336,12 @@ Four-layer classification pipeline:
 - **Claim-level grounding** (`lib/claim-verifier.ts`): Enumerated lists (charges, crimes, counts) are verified item-by-item against cited chunks; ungrounded items are stripped
 - **Transcript fallback**: If LLM returns empty/minimal for hearing queries, substitute helpful guidance
 
-### Step 9: LLM-as-Judge (`lib/prompts.ts` — JUDGE_SYSTEM_PROMPT)
+### Step 8b: Deterministic Judge — Layer 1 (`lib/deterministic-judge.ts`)
+- Runs BEFORE the LLM Judge. Catches prohibited terms, citation bounds violations, and redaction references deterministically — no LLM call needed.
+- If Layer 1 fails → immediate REJECT, skipping the LLM Judge entirely.
+- See Section 5.3 for details.
+
+### Step 9: LLM-as-Judge — Layer 2 (`lib/prompts.ts` — JUDGE_SYSTEM_PROMPT)
 *(See Section 5 — The Contract)*
 
 ### Step 10: Citation Extraction & Validation
@@ -414,45 +526,47 @@ The system prompt is constructed dynamically based on query characteristics:
 | PASTED TEXT section | When paste exists | User's pasted content + PASTE_TEXT_MATCHED flag |
 | CONVERSATION HISTORY | When multi-turn | Last 3 exchanges (sanitized for redaction) |
 
-### 5.3 The LLM-as-Judge
+### 5.3 Two-Layer Judge Architecture
 
-**File**: `lib/prompts.ts` — `JUDGE_SYSTEM_PROMPT`
+Every generated answer passes through a two-layer verification gate before reaching the user.
 
-Every generated answer passes through a second LLM call that acts as a verification gate.
+#### Layer 1: Deterministic Judge (`lib/deterministic-judge.ts`)
 
-**Architecture**: The Judge receives the generated answer + the retrieved chunks and returns APPROVE or REJECT with a reason.
+Runs first, with zero LLM cost. Catches violations that require no semantic understanding:
 
-**Critical design choice**: "Err on the side of APPROVE. Default to APPROVE. Only REJECT if CERTAIN of a violation."
+| Check | What It Catches | On Fail |
+|-------|----------------|---------|
+| Prohibited terms | `he/duterte/du30 is/was guilty/innocent/convicted/acquitted`, `murderer/tyrant/hero/saint/villain`, `witch hunt/persecution/justice served` | Immediate REJECT |
+| Citation bounds | `[N]` where N < 1 or N > chunks.length | Immediate REJECT |
+| Redaction references | `redacted name/person/witness/individual/identity` in answer | Immediate REJECT |
 
-**REJECT conditions** (must be confident):
-- Factual claim contradicts or is unsupported by chunks
-- Opinion on guilt/innocence/culpability
-- Politically loaded language
-- Comparison to other leaders
-- Framing ICC as for/against a country
-- Speculation on decisions
-- References to non-ICC sources
-- De-anonymizing [REDACTED]
-- Evaluating evidence strength
-- Hypothetical/counterfactual engagement
-- Adopting user's numbers/claims
-- Enumerated items not in any chunk
-- (Fact-check) 14 additional fact-check-specific conditions
-- (Transcript) 2 additional transcript-specific conditions
+**Fact-check exemption**: Lines containing FALSE/UNVERIFIABLE/OPINION refutation context are exempt from prohibited-term checks (e.g., "ICC documents indicate otherwise: no conviction has been rendered" is allowed even though it contains "conviction").
 
-**APPROVE explicitly for** (common false triggers prevented):
-- Partial answers with explicit "not available" for gaps
-- Listing evidence categories from chunks (factual reporting, not evaluation)
-- Reasonable paraphrasing
-- Date contextualization from chunk metadata
-- Grounded reasoning from chunks ("Yes, because [chunk content]")
-- Correct transcript framing as testimony/argument
-- Judge in-hearing directives cited as authoritative
-- Numbered lists that summarize chunk content
-- Hearing/transcript queries with partial answers
-- **Synthesized descriptions of case-specific terms from contextual mentions across chunks**
-- **(Fact-check)** When verdict is FALSE: Answer states user's claim contradicts ICC docs — do NOT reject for "contradicts chunks"
-- **(Fact-check)** Party/counsel statements labeled OPINION (e.g., "Kaufman claimed X") — APPROVE
+If Layer 1 passes → proceed to Layer 2.
+
+#### Layer 2: Reduced-Scope LLM Judge (`lib/prompts.ts` — `JUDGE_SYSTEM_PROMPT`)
+
+**Model**: `gpt-4o` (configurable via `JUDGE_MODEL` env var). Upgraded from gpt-4o-mini for stronger reasoning.
+
+**Prompt size**: ~600 tokens (reduced from ~2000). The prompt explicitly notes that prohibited terms, citation bounds, and redaction are handled by Layer 1.
+
+**REJECT conditions** (only 4 — reduced from 27+):
+1. Factual claim in the answer is NOT supported by any retrieved chunk (reasonable paraphrasing OK)
+2. Content from a transcript or filing is presented as a court ruling
+3. The answer expresses opinion on guilt/innocence or uses politically loaded language not caught by Layer 1
+4. The answer references information clearly not from the provided chunks
+
+**APPROVE guidance**:
+- Factual claims trace to chunk content (paraphrasing acceptable)
+- Neutral tone
+- Transcript/filing sources properly framed as argument/testimony
+- Synthesized descriptions from contextual mentions across chunks
+- Err on the side of APPROVE. Default to APPROVE. Only REJECT if CERTAIN.
+
+**Fact-check specific**:
+- When verdict is FALSE: Answer correctly refutes user's claim — do NOT reject for "contradicts chunks"
+- When verdict is UNVERIFIABLE: Answer states documents contain no information — do NOT reject for "unsupported"
+- Party/counsel statements labeled OPINION — APPROVE
 
 **When Judge REJECTs**: The system returns a generic fallback message. For hearing queries with transcript chunks, it returns a transcript-specific helpful fallback instead.
 
@@ -499,13 +613,22 @@ After citations are extracted, each is validated:
 
 This catches cases where the LLM cites [1] but the claim doesn't actually come from chunk [1].
 
-### 5.6 Conversation History Sanitization
+### 5.6 Conversation History Sanitization (Two-Pass)
 
-**File**: `lib/chat.ts` — `sanitizeHistory()`
+Conversation history is sanitized in two passes before reaching the LLM or Judge:
 
-Before passing conversation history to the LLM or Judge:
+**Pass 1: Contamination Guard** (`lib/contamination-guard.ts` — `sanitizeHistoryForContamination()`):
+- Strips user-asserted facts, numbers, causal attributions, guilt/innocence claims, and premise-framing from user messages
+- 7 pattern categories covering: numbers + casualties, standalone large numbers near drug war context, premise-framing ("given that X"), source attributions, actor + causal verb, guilt/innocence, existence claims with numbers
+- Prevents numeric anchoring (user says "30,000" → next turn answer adopts it)
+- Only transforms user messages; assistant messages preserved
+- Replacements: `[User-stated number — omitted from context]`, `[User-stated claim — omitted from context]`, `[User-stated premise — omitted from context]`
+
+**Pass 2: Redaction Sanitization** (`lib/chat.ts` — `sanitizeHistory()`):
 - If any message mentions [REDACTED] or redaction-related terms → replace with "[Prior exchange about redacted content — omitted]"
-- This prevents the LLM from accumulating reasoning about redacted content across turns (Hard Rule 9)
+- Prevents the LLM from accumulating reasoning about redacted content across turns (Hard Rule 9)
+
+**Pipeline order**: `conversationHistory → sanitizeHistoryForContamination → sanitizeHistory → buildSystemPrompt`
 
 ---
 
@@ -536,15 +659,17 @@ Fact-check mode activates when:
 | S-6 | Comparisons to others | "Like other ICC-convicted leaders, Duterte X" → "Duterte X" |
 | S-7 | Double negatives | "It's not true that he was not charged" → "He was charged" |
 
-**Decomposition Rules (D1-D6)** — Applied AFTER stripping. **D-1 in code** (`decomposeCommaList`): "charged with X, Y, Z" split into separate claims before LLM.
-| Rule | What it decomposes | Example |
-|------|-------------------|---------|
-| D-1 | Comma/AND lists | "charged with murder, torture, and rape" → 3 claims |
-| D-2 | Subordinate clauses | "After being convicted, Duterte appealed" → 2 claims |
-| D-3 | Conditional/causal chains | "Since the ICC found him guilty, the Philippines must extradite him" → 2 claims |
-| D-4 | Implicit prerequisites | "Duterte served part of his sentence" → "was sentenced" + "served sentence" |
-| D-5 | Temporal sequences | "arrested, tried, and convicted" → 3 claims |
-| D-6 | Exclusivity claims | "only charged with imprisonment" → "charged with imprisonment" + "no other charges" |
+**Decomposition Rules (D1-D6)** — Applied AFTER stripping. **D-1, D-2, D-3 in code**; D-4 through D-6 in prompt.
+| Rule | What it decomposes | Example | Implementation |
+|------|-------------------|---------|----------------|
+| D-1 | Comma/AND lists | "charged with murder, torture, and rape" → 3 claims | Code: `decomposeCommaList` |
+| D-2 | Subordinate clauses | "After being convicted, Duterte appealed" → 2 claims | Code: `decomposeSubordinate` |
+| D-3 | Conditional/causal chains | "Since the ICC found him guilty, the Philippines must extradite him" → 2 claims | Code: `decomposeCausalChain` |
+| D-4 | Implicit prerequisites | "Duterte served part of his sentence" → "was sentenced" + "served sentence" | Prompt + `injectPrerequisiteClaims` |
+| D-5 | Temporal sequences | "arrested, tried, and convicted" → 3 claims | Prompt |
+| D-6 | Exclusivity claims | "only charged with imprisonment" → "charged with imprisonment" + "no other charges" | Prompt |
+
+**Decomposition pipeline order**: `decomposeCommaList → decomposeSubordinate → decomposeCausalChain → slice(0, 5)`. Minimum subclaim length: 15 characters (prevents over-splitting).
 
 **Decomposition Stopping Rules**:
 - Only decompose when BOTH subclaims are independently verifiable
@@ -751,43 +876,62 @@ When `documentType === "transcript"`:
 
 ### 8.1 Confirmed Issues
 
-1. **Vector search returns 0 for drug war terms**: Embeddings of "What is Tokhang?" don't match well against chunk embeddings that mention Tokhang in context (not as a defined term). FTS (keyword search) works fine. The `expandQueryForEmbedding` function was added to mitigate this, but vec_count is still often 0 for these queries.
+1. **Vector search returns 0 for drug war terms**: ~~Embeddings of "What is Tokhang?" don't match well against chunk embeddings.~~ **MITIGATED** — Glossary chunk injection (`npm run ingest-glossary`) adds 14 synthetic embedding anchors for domain terms. Query expansion (`expandQueryForEmbedding`) also helps. FTS still carries primary load for these queries.
 
 2. ~~**French duplicate document**~~: **RESOLVED** — Migration `006_remove_french_duplicate.sql` removed the French Article 15(3) decision from the KB.
 
-3. **gpt-4o-mini as the sole LLM**: All four LLM calls (generation, classification, fact-check verification, judge) use gpt-4o-mini. This is cost-efficient but may limit quality for complex reasoning tasks (e.g., fact-check verification of subtle procedural claims).
+3. ~~**gpt-4o-mini as the sole LLM**~~: **RESOLVED** — Judge and fact-check verification now use `gpt-4o` (configurable via env vars). Generation, classification, claim extraction, and translation remain on `gpt-4o-mini`.
 
-### 8.2 Potential Improvement Areas
+### 8.2 Remaining Improvement Areas
 
 **For the reviewer to consider**:
 
-1. **Rule 10 / Rule 24 tension**: Is there a cleaner way to handle the "decline vs synthesize" decision? Currently relies on regex-detected `isDrugWarTermQuery` flag. What about similar terms not in the regex list?
+1. **Rule 10 / Rule 24 tension**: Is there a cleaner way to handle the "decline vs synthesize" decision? Currently relies on regex-detected `isDrugWarTermQuery` flag. Glossary chunks help but terms not in the regex list may still trigger incorrect decline.
 
 2. **Threshold tuning**: The intent-adaptive thresholds were set heuristically. Could they be tuned empirically? Is 0.45 for case_facts too low (noisy results) or too high (missed relevant chunks)?
 
-3. **Judge false positive rate**: The Judge has a long list of "do NOT reject for these" conditions. This suggests historical false rejections. Is the Judge model (gpt-4o-mini) capable enough for this task? Would a stronger model reduce false rejections?
+3. ~~**Judge false positive rate**~~: **MITIGATED** — Two-layer Judge (deterministic + reduced-scope gpt-4o) significantly reduces false rejections. Monitor ongoing false-reject rate.
 
-4. **Claim extraction quality**: The stripping and decomposition rules are in the prompt, not enforced deterministically. The LLM may not apply them consistently. Should some rules be enforced in code?
+4. ~~**Claim extraction quality**~~: **PARTIALLY RESOLVED** — D1, D2, D3 now deterministic in code. D4 partially in code (`injectPrerequisiteClaims`). D5, D6 remain prompt-only.
 
-5. **Citation integrity threshold**: The 40% key-term overlap threshold for citation validation is a rough heuristic. Is it too strict (marking valid citations as untrusted) or too lenient?
+5. **Citation integrity threshold**: The 40% key-term overlap threshold for citation validation is a rough heuristic. A semantic proposition verifier (mini NLI check) is designed but not yet implemented (see `production-hardening-blueprint.md` §3).
 
-6. **Transcript handling complexity**: There are 3 separate transcript fallback locations in chat.ts (lines 587-602, 641-651, 676-693). This duplication could lead to inconsistencies. Could these be consolidated?
+6. **Transcript handling complexity**: There are 3 separate transcript fallback locations in chat.ts. This duplication could lead to inconsistencies. Could these be consolidated?
 
 7. **Claim verifier coverage**: The STEM_EQUIVALENTS map is manually maintained. New terms from ingested documents won't be matched unless added. Could this be automated or supplemented?
 
-8. **Multilingual fact-checking**: Claims in Tagalog/Tanglish are translated to English before extraction. Translation errors could alter the claim's meaning. Is the translation quality sufficient for legal fact-checking?
+8. ~~**Multilingual fact-checking**~~: **MITIGATED** — Translation stability audit (`lib/translation-stability.ts`) logs when Filipino modal markers are converted to English certainty markers. Logging-only for now; dual-language verification designed but not yet implemented.
 
 9. **Conversation history**: Only the last 3 exchanges are passed. For complex multi-turn investigations, this might lose important context. Is 3 the right number?
 
 10. **Retrieval top-K**: Default 4 chunks; 6 for case_facts + drug war terms (dynamic top-k). May still be insufficient for very broad questions.
 
-11. **No re-ranking model**: The "rerank" step is just a top-K slice. A cross-encoder reranker (e.g., Cohere rerank, BGE reranker) could significantly improve retrieval quality.
+11. **No re-ranking model**: The "rerank" step is just a top-K slice. A cross-encoder reranker (e.g., Cohere rerank, BGE reranker) could significantly improve retrieval quality. Designed as P2 in production hardening blueprint.
 
-12. **Single embedding model**: `text-embedding-3-small` is used for both queries and documents. A dual-encoder or query-specific fine-tuned model might better capture the domain vocabulary.
+12. **Single embedding model**: `text-embedding-3-small` is used for both queries and documents. Migration to `text-embedding-3-large` designed as P2.
 
 13. **No user feedback loop**: There's no mechanism for users to report incorrect answers or provide feedback that could improve the system over time.
 
 14. **Paste text length limit**: Pasted text is truncated to 2000 chars in the prompt and 3000 chars for claim extraction. Long Facebook posts or articles could be cut off.
+
+---
+
+## 10. Production Hardening Reference
+
+The production hardening blueprint (`prompts/production-hardening-blueprint.md`) documents the full rationale, design, and prioritization for all hardening changes. Key sections:
+
+- **§2**: Causal attribution engine — sentence-window co-occurrence, expanded verb taxonomy, allegation-source compound
+- **§3**: Semantic citation validation — mini proposition verifier design (P1, not yet implemented)
+- **§4**: Multi-turn contamination guard — expanded patterns, premise-framing detection
+- **§5**: Domain embedding strategy — glossary injection (implemented), cross-encoder reranker (P2)
+- **§6**: Judge refactor — two-layer architecture, reduced-scope prompt, model allocation
+- **§7**: Deterministic decomposition — D2/D3 in code, D5/D6 as future work
+- **§8**: Normative filter — expanded patterns, borderline query handling
+- **§9**: Retrieval drift — verdict stability tests, release gating
+- **§10**: Translation stability — back-translation check, dual-language verification design
+- **§11**: Prioritized roadmap — P0 (implemented), P1 (partially implemented), P2 (future)
+
+The implementation prompt (`prompts/cursor-production-hardening-prompt.md`) contains the step-by-step implementation instructions that were followed.
 
 ---
 
@@ -796,26 +940,33 @@ When `documentType === "transcript"`:
 | File | Purpose |
 |------|---------|
 | `lib/chat.ts` | Main pipeline orchestrator (Q&A and fact-check flows) |
-| `lib/prompts.ts` | System prompt construction, Hard Rules, Judge prompt |
+| `lib/prompts.ts` | System prompt construction, Hard Rules, reduced-scope Judge prompt |
 | `lib/retrieve.ts` | Hybrid retrieval engine (vector + FTS + RRF, dynamic top-k) |
 | `lib/intent-classifier.ts` | 4-layer intent classification |
 | `lib/intent.ts` | Intent → RAG index mapping, dual-index logic |
-| `lib/fact-check.ts` | Claim extraction, verification, verdict generation |
+| `lib/fact-check.ts` | Claim extraction (D1/D2/D3), verification, verdict generation |
 | `lib/claim-verifier.ts` | Post-generation claim-level grounding |
 | `lib/deterministic-strip.ts` | Pre-pass stripping (S-2,S-3,S-5,S-7) before claim extraction |
+| `lib/deterministic-judge.ts` | Layer 1 deterministic Judge (prohibited terms, citation bounds, redaction) |
+| `lib/attribution-verifier.ts` | Causal attribution enforcement (3-sentence-window co-occurrence, allegation-source compound) |
 | `lib/allegation-distinction.ts` | Allegation vs ruling framing for transcript/filing sources |
+| `lib/contamination-guard.ts` | Multi-turn contamination guard (strips user-asserted facts from history) |
 | `lib/procedural-state.ts` | Canonical case state, CASE_STATE_OVERRIDE env |
-| `lib/normative-filter.ts` | Opinion-seeking query detection and refusal |
+| `lib/normative-filter.ts` | Normative/evaluative query detection and refusal (14 patterns) |
+| `lib/verdict-tone.ts` | Authority tone suppression (epistemic-humble verdict phrasing) |
+| `lib/translation-stability.ts` | Translation stability audit (modal/voice preservation logging) |
 | `lib/language-detect.ts` | Tagalog/English/Tanglish detection |
 | `lib/paste-detect.ts` | ICC document vs social media classification |
 | `lib/translate.ts` | Filipino → English translation |
 | `lib/openai-client.ts` | OpenAI client singleton |
 | `lib/logger.ts` | Structured event logging |
 | `scripts/ingest.ts` | PDF ingestion pipeline |
+| `scripts/ingest-glossary.ts` | Synthetic glossary chunk injection (14 domain terms) |
 | `scripts/check-retrieval.ts` | Diagnostic: test retrieval for a query |
 | `scripts/list-ingested.ts` | Diagnostic: list all ingested documents |
 | `scripts/run-real-world-factchecks.ts` | Run 15 real-world fact-check examples |
 | `scripts/verify-retrieval-drift.ts` | Retrieval drift monitoring |
+| `scripts/verify-verdict-stability.ts` | Verdict stability regression tests (5 canonical tests) |
 | `scripts/verify-adversarial-safeguards.ts` | Adversarial safeguard test suite |
 
 ## Appendix B: LLM Call Summary
@@ -826,7 +977,8 @@ When `documentType === "transcript"`:
 | Paste detection (fallback) | gpt-4o-mini | Classify paste as ICC doc vs social media | 16 |
 | Translation | gpt-4o-mini | Filipino → English | varies |
 | Q&A generation | gpt-4o-mini | Generate cited answer from chunks | 1024 |
-| Judge | gpt-4o-mini | Verify answer safety | 256 |
+| Deterministic Judge (Layer 1) | — (no LLM) | Prohibited terms, citation bounds, redaction | — |
+| LLM Judge (Layer 2) | **gpt-4o** | Verify answer safety (reduced scope: 4 conditions) | 256 |
 | Claim extraction | gpt-4o-mini | Extract/classify claims from paste | 512 |
-| Fact-check verification | gpt-4o-mini | Verify claims against chunks (JSON) | 1500 |
+| Fact-check verification | **gpt-4o** | Verify claims against chunks (JSON) | 1500 |
 | Embedding | text-embedding-3-small | Embed query for vector search | N/A |

@@ -27,6 +27,10 @@ const FACTUAL_PROCEDURAL_OK = [
   /\bis\s+(the\s+deferral|it)\s+(granted|approved|admissible)\b/i,
   /\bwas\s+(the\s+deferral|it)\s+(granted|approved|rejected)\b/i,
   /\b(did|does|has)\s+(the\s+)?(defence|defense|philippines|prosecution)\s+(argue|claim|contend|submit)\s+that\b/i,
+  /\bis\s+(the\s+)?(case|investigation|prosecution)\s+(legitimate|admissible|valid)\b/i,
+  /\b(should|must|does)\s+(duterte|he|the\s+accused)\s+(appear|attend|surrender|cooperate|comply)\b/i,
+  /\b(is|was)\s+(the\s+)?(arrest\s+warrant|warrant|summons|order)\s+(legitimate|valid|enforceable|legal)\b/i,
+  /\b(can|could|is)\s+(the\s+)?(case|charges?|investigation)\s+(be\s+)?(dismissed|dropped|withdrawn|challenged)\b/i,
 ];
 
 /**

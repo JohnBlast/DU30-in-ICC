@@ -29,7 +29,8 @@
     "ingest:discover": "tsx --env-file=.env.local scripts/ingest.ts --discover",
     "run-real-world-factchecks": "tsx --env-file=.env.local scripts/run-real-world-factchecks.ts",
     "ingest-glossary": "tsx --env-file=.env.local scripts/ingest-glossary.ts",
-    "verify-verdict-stability": "tsx --env-file=.env.local scripts/verify-verdict-stability.ts"
+    "verify-verdict-stability": "tsx --env-file=.env.local scripts/verify-verdict-stability.ts",
+    "verify-false-decline": "tsx --env-file=.env.local scripts/verify-false-decline.ts"
   },
   "dependencies": {
     "@langchain/textsplitters": "^1.0.1",

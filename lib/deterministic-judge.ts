@@ -11,7 +11,28 @@ export interface DeterministicJudgeResult {
   warnings: string[];
 }
 
+const PROCEDURAL_STATUS_EXEMPT_DJ = [
+  /\b(has\s+)?not\s+been\s+(convicted|acquitted|sentenced|found\s+guilty)/i,
+  /\bwas\s+not\s+(convicted|acquitted|sentenced)/i,
+  /\bno\s+(verdict|conviction|acquittal|sentence)\s+(has\s+been|was)\s+(rendered|issued|handed\s+down)/i,
+  /\bcase\s+is\s+(at|currently\s+at|in\s+the)\s+/i,
+  /\b(has\s+not\s+yet|not\s+yet\s+been)\b/i,
+  /\bno\s+trial\s+has\b/i,
+];
+
 const PROHIBITED_PATTERNS = [
+  {
+    pattern: /\b(he|duterte|du30|the\s+accused)\s+(is|was)\s+not\s+(guilty|innocent)\b/i,
+    label: "negated guilt/innocence opinion",
+  },
+  {
+    pattern: /\b(he|duterte|du30|the\s+accused)\s+(is|was)\s+found\s+not\s+guilty\b/i,
+    label: "not-guilty finding assertion",
+  },
+  {
+    pattern: /\bnot\s+(guilty|innocent)\s+(of|as|for)\b/i,
+    label: "negated guilt/innocence",
+  },
   {
     pattern: /\b(he|duterte|du30)\s+(is|was)\s+(guilty|innocent|convicted|acquitted)\b/i,
     label: "guilt/innocence",
@@ -47,20 +68,22 @@ export function runDeterministicJudge(
 ): DeterministicJudgeResult {
   const warnings: string[] = [];
 
-  // 1. Prohibited terms (exempt fact-check refutation lines)
+  // 1. Prohibited terms (exempt fact-check refutation; exempt procedural-status for guilt/innocence)
   for (const { pattern, label } of PROHIBITED_PATTERNS) {
     const match = answer.match(pattern);
     if (match) {
       const line = getLineContaining(answer, match.index ?? 0);
-      const isExempt =
+      const isFactCheckExempt =
         isFactCheck && FACT_CHECK_EXEMPT_PATTERNS.some((p) => p.test(line));
-      if (!isExempt) {
-        return {
-          pass: false,
-          reason: `Prohibited term: ${label} ("${match[0]}")`,
-          warnings,
-        };
-      }
+      const isProceduralExempt =
+        label === "guilt/innocence" &&
+        PROCEDURAL_STATUS_EXEMPT_DJ.some((p) => p.test(line));
+      if (isFactCheckExempt || isProceduralExempt) continue;
+      return {
+        pass: false,
+        reason: `Prohibited term: ${label} ("${match[0]}")`,
+        warnings,
+      };
     }
   }
 
