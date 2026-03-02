@@ -4,16 +4,17 @@
  * Login page — username + password form.
  * PRD §4 (Auth), Task 7.1.
  * Styled with Primer design system.
- * Uses native form POST so server returns 303 redirect with cookie; no client-side redirect.
  */
 
 import { useState, useEffect } from "react";
 import { Button, FormControl, TextInput } from "@primer/react";
 
 export default function LoginPage() {
+  const [username, setUsername] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [signedOut, setSignedOut] = useState(false);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -21,19 +22,37 @@ export default function LoginPage() {
     if (params.get("signed_out") === "1") {
       setSignedOut(true);
       window.history.replaceState(null, "", "/login");
-    } else {
-      const err = params.get("error");
-      if (err) {
-        setError(decodeURIComponent(err));
-        window.history.replaceState(null, "", "/login");
-      } else if (window.location.search === "?") {
-        window.history.replaceState(null, "", "/login");
-      }
+    } else if (window.location.search === "?") {
+      window.history.replaceState(null, "", "/login");
     }
   }, []);
 
-  function handleSubmit() {
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError("");
     setLoading(true);
+
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+        credentials: "same-origin",
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data.error ?? "Login failed");
+        setLoading(false);
+        return;
+      }
+
+      window.location.href = "/";
+    } catch {
+      setError("Login failed. Please try again.");
+      setLoading(false);
+    }
   }
 
   return (
@@ -53,17 +72,13 @@ export default function LoginPage() {
           training or shared with third parties.
         </div>
 
-        <form
-          action="/api/auth/login"
-          method="POST"
-          onSubmit={handleSubmit}
-          className="mt-6 space-y-4"
-        >
+        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
           <FormControl id="username" required>
             <FormControl.Label>Username</FormControl.Label>
             <TextInput
-              name="username"
               type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
               autoComplete="username"
               disabled={loading}
               block
@@ -73,8 +88,9 @@ export default function LoginPage() {
           <FormControl id="password" required>
             <FormControl.Label>Password</FormControl.Label>
             <TextInput
-              name="password"
               type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
               autoComplete="current-password"
               disabled={loading}
               block
