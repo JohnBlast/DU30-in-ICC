@@ -12,6 +12,12 @@ const NORMATIVE_PATTERNS = [
   /\b(morally|ethically)\s+(right|wrong|justified)\b/i,
   /\b(justified|unjustified)\s+(in|to)\b/i,
   /\bdeserves?\s+(to\s+)?(be\s+)?(convicted|punished|freed)\b/i,
+  /\b(objectively|honestly|realistically|truthfully)\s+(speaking\s*,?\s*)?(is|was|are|were|do|does|did)\b/i,
+  /\b(would\s+you\s+agree|don'?t\s+you\s+think|wouldn'?t\s+you\s+say|isn'?t\s+it\s+(true|obvious|clear))\b/i,
+  /\b(is\s+it\s+(a\s+)?fact\s+that)\s+.*(biased|political|illegal|unfair|hypocritical|corrupt)/i,
+  /\b(more|less)\s+(effective|fair|biased|corrupt|legitimate)\s+than\b/i,
+  /\bhow\s+can\s+(the\s+)?(icc|court)\s+(justify|claim|pretend|dare)\b/i,
+  /\b(interference|meddling|neo-?colonial|imperial)\s+(in|with|of)\s+(philippine|filipino|our|the)\b/i,
 ];
 
 /** Factual/procedural questions that might match normative patterns but are valid */
@@ -20,6 +26,7 @@ const FACTUAL_PROCEDURAL_OK = [
   /\bwhat\s+does\s+the\s+(rome\s+statute|icc)\s+say\s+about\b/i,
   /\bis\s+(the\s+deferral|it)\s+(granted|approved|admissible)\b/i,
   /\bwas\s+(the\s+deferral|it)\s+(granted|approved|rejected)\b/i,
+  /\b(did|does|has)\s+(the\s+)?(defence|defense|philippines|prosecution)\s+(argue|claim|contend|submit)\s+that\b/i,
 ];
 
 /**

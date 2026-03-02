@@ -372,6 +372,55 @@ function decomposeCommaList(claim: ExtractedClaim): ExtractedClaim[] {
   return items.map((item) => ({ ...claim, extractedText: `${prefix}${item}` }));
 }
 
+const SUBORDINATE_PATTERNS = [
+  /^(after|before|when|once|upon)\s+(.{15,}?),\s+(.{15,})$/i,
+  /^(.{15,}?)\s+(after|before|when|once)\s+(.{15,})$/i,
+];
+
+function decomposeSubordinate(claim: ExtractedClaim): ExtractedClaim[] {
+  if (claim.claimType !== "factual_claim") return [claim];
+  for (const p of SUBORDINATE_PATTERNS) {
+    const m = claim.extractedText.match(p);
+    if (m) {
+      let parts: string[];
+      if (/^(after|before|when|once|upon)$/i.test(m[1] ?? "")) {
+        parts = [(m[2] ?? "").trim(), (m[3] ?? "").trim()];
+      } else {
+        parts = [(m[1] ?? "").trim(), (m[3] ?? "").trim()];
+      }
+      const valid = parts.filter((s) => s.length >= 15);
+      if (valid.length === 2) {
+        return valid.map((t) => ({ ...claim, extractedText: t.charAt(0).toUpperCase() + t.slice(1) }));
+      }
+    }
+  }
+  return [claim];
+}
+
+const CAUSAL_CHAIN_PATTERNS = [
+  /^(since|because|as)\s+(.{15,}?),\s+(.{15,})$/i,
+  /^(.{15,}?)\s+(so|therefore|thus|hence)\s+(.{15,})$/i,
+];
+
+function decomposeCausalChain(claim: ExtractedClaim): ExtractedClaim[] {
+  if (claim.claimType !== "factual_claim") return [claim];
+  for (const p of CAUSAL_CHAIN_PATTERNS) {
+    const m = claim.extractedText.match(p);
+    if (m) {
+      let parts: string[];
+      if (m[1]?.match(/^(since|because|as)$/i)) {
+        parts = [m[2]?.trim() ?? "", m[3]?.trim() ?? ""];
+      } else {
+        parts = [m[1]?.trim() ?? "", m[3]?.trim() ?? ""];
+      }
+      if (parts.filter((s) => s.length >= 15).length === 2) {
+        return parts.map((t) => ({ ...claim, extractedText: t.charAt(0).toUpperCase() + t.slice(1) }));
+      }
+    }
+  }
+  return [claim];
+}
+
 /** Hypothetical/prediction → OPINION (if/when X happens) */
 const HYPOTHETICAL_PATTERN = /^(if|when|once)\s+.+\s+(happens?|occurs?|begins?|starts?|will)/i;
 function isHypotheticalClaim(text: string): boolean {
@@ -446,7 +495,11 @@ Extract and classify statements from the content above.`;
       }
     }
 
-    let result = claims.flatMap(decomposeCommaList).slice(0, 5);
+    let result = claims
+      .flatMap(decomposeCommaList)
+      .flatMap(decomposeSubordinate)
+      .flatMap(decomposeCausalChain)
+      .slice(0, 5);
 
     if (result.length === 0 && ICC_CLAIM_INDICATORS.test(text)) {
       const fallback = text
@@ -518,8 +571,9 @@ export async function generateFactCheckResponse(
     const prompt = buildFactCheckPrompt(normalizedClaims, chunks, responseLanguage);
     const openai = getOpenAIClient();
 
+    const FACTCHECK_MODEL = process.env.FACTCHECK_MODEL ?? "gpt-4o";
     const res = await openai.chat.completions.create({
-      model: "gpt-4o-mini",
+      model: FACTCHECK_MODEL,
       messages: [
         { role: "system", content: "You are a neutral fact-checker. Respond ONLY in valid JSON format." },
         { role: "user", content: prompt },

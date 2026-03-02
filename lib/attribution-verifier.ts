@@ -7,38 +7,90 @@
 import type { RetrievalChunk } from "./retrieve";
 import type { ClaimVerdict } from "./fact-check";
 
-const CAUSAL_VERBS = /\b(ordered|directed|authorized|commanded|instructed|oversaw|approved|sanctioned|endorsed)\b/i;
+const CAUSAL_VERB_PATTERNS: RegExp[] = [
+  /\b(ordered|directed|authorized|commanded|instructed|oversaw|approved|sanctioned|endorsed|masterminded|orchestrated|initiated)\b/i,
+  /\b(bore\s+responsibility\s+for|was\s+responsible\s+for|presided\s+over)\b/i,
+  /\b(carried\s+out\s+under|at\s+the\s+(direction|behest|order)\s+of|on\s+(the\s+)?orders?\s+of)\b/i,
+  /\b(aided\s+and\s+abetted|contributed\s+to|facilitated|had\s+(effective\s+)?command\s+(and\s+control\s+)?over)\b/i,
+];
+
 const ACTOR_PATTERNS = /\b(duterte|du30|the accused|the president)\b/i;
 const HARMFUL_ACTS = /\b(killings?|executions?|murders?|extrajudicial|drug war|tokhang|neutralizations?|operations?)\b/i;
+
+const ALLEGATION_CONTEXT_VERBS =
+  /\b(alleges?|argues?|submits?|contends?|claims?|according\s+to\s+the\s+(prosecution|OTP|defence|defense))\b/i;
 
 /**
  * Detect if claim has causal attribution structure: [Actor] + [CausalVerb] + [HarmfulAct]
  */
 export function hasCausalAttributionStructure(claim: string): boolean {
-  return (
-    CAUSAL_VERBS.test(claim) &&
-    (ACTOR_PATTERNS.test(claim) || /\bhe\b/i.test(claim)) &&
-    HARMFUL_ACTS.test(claim)
+  const hasVerb = CAUSAL_VERB_PATTERNS.some((p) => p.test(claim));
+  const hasActor = ACTOR_PATTERNS.test(claim) || /\bhe\b/i.test(claim);
+  const hasAct = HARMFUL_ACTS.test(claim);
+  return hasVerb && hasActor && hasAct;
+}
+
+/**
+ * Check if actor + verb + act co-occur within a 3-sentence window.
+ */
+function sentenceWindowCooccurrence(
+  chunkContent: string,
+  actorPattern: RegExp,
+  verbPatterns: RegExp[],
+  actPattern: RegExp,
+  windowSize: number = 3
+): boolean {
+  const sentences = chunkContent.split(/(?<=[.!?])\s+/);
+  for (let i = 0; i <= sentences.length - 1; i++) {
+    const window = sentences.slice(i, i + windowSize).join(" ");
+    const hasActor = actorPattern.test(window);
+    const hasVerb = verbPatterns.some((p) => p.test(window));
+    const hasAct = actPattern.test(window);
+    if (hasActor && hasVerb && hasAct) return true;
+  }
+  return false;
+}
+
+/**
+ * Check if a single chunk supports causal attribution (3-sentence window co-occurrence).
+ */
+function chunkSupportsCausalAttribution(claim: string, chunkContent: string): boolean {
+  return sentenceWindowCooccurrence(
+    chunkContent,
+    ACTOR_PATTERNS,
+    CAUSAL_VERB_PATTERNS,
+    HARMFUL_ACTS,
+    3
   );
 }
 
 /**
- * Check if a single chunk contains actor + causal verb + harmful act (same-chunk co-occurrence).
+ * Check if causal attribution comes from allegation context (transcript/filing with allegation verbs).
+ * If so, downgrade VERIFIED to UNVERIFIABLE — we cannot treat party arguments as verified facts.
  */
-function chunkSupportsCausalAttribution(claim: string, chunkContent: string): boolean {
-  const chunkLower = chunkContent.toLowerCase();
+export function isAllegationContextAttribution(
+  claim: string,
+  chunk: RetrievalChunk
+): boolean {
+  if (!hasCausalAttributionStructure(claim)) return false;
+  const docType = (chunk.metadata.document_type ?? "").toLowerCase();
+  if (docType !== "transcript" && docType !== "filing") return false;
 
-  const verbMatch = claim.match(CAUSAL_VERBS);
-  const verbs = verbMatch ? [verbMatch[0].toLowerCase()] : [];
-  const hasVerb = verbs.some((v) => chunkLower.includes(v));
-
-  const hasActor = ACTOR_PATTERNS.test(chunkLower) || chunkLower.includes("he ");
-
-  const actMatch = claim.match(HARMFUL_ACTS);
-  const acts = actMatch ? [actMatch[0].toLowerCase()] : [];
-  const hasAct = acts.some((a) => chunkLower.includes(a));
-
-  return hasVerb && hasActor && hasAct;
+  const sentences = chunk.content.split(/(?<=[.!?])\s+/);
+  for (let i = 0; i < sentences.length; i++) {
+    const window = sentences.slice(i, i + 3).join(" ");
+    const hasAttribution = sentenceWindowCooccurrence(
+      window,
+      ACTOR_PATTERNS,
+      CAUSAL_VERB_PATTERNS,
+      HARMFUL_ACTS,
+      3
+    );
+    if (hasAttribution && ALLEGATION_CONTEXT_VERBS.test(window)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -56,7 +108,8 @@ function extractCitedChunkIndices(citationMarker: string): number[] {
 
 /**
  * Enforce attribution verification: if claim has causal structure and verdict is VERIFIED,
- * require same-chunk co-occurrence. Otherwise downgrade to UNVERIFIABLE.
+ * require same-chunk co-occurrence. If support comes only from allegation context (transcript/filing),
+ * downgrade to UNVERIFIABLE.
  */
 export function enforceAttributionVerification(
   claim: string,
@@ -75,5 +128,10 @@ export function enforceAttributionVerification(
   if (citedChunks.length === 0) return "unverifiable";
 
   const anySupports = citedChunks.some((c) => chunkSupportsCausalAttribution(claim, c.content));
-  return anySupports ? verdict : "unverifiable";
+  if (anySupports) {
+    const anyAllegation = citedChunks.some((c) => isAllegationContextAttribution(claim, c));
+    if (anyAllegation) return "unverifiable";
+    return verdict;
+  }
+  return "unverifiable";
 }

@@ -6,19 +6,35 @@
 
 const USER_FACT_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
   {
-    pattern: /\b\d{2,}\s*(killed|died|victims|people|casualties)\b/gi,
+    pattern: /\b\d{3,}\s*(killed|died|victims|people|casualties|dead|deaths?)\b/gi,
+    replacement: "[User-stated number — omitted from context]",
+  },
+  {
+    pattern:
+      /\b(approximately|around|about|at least|over|more than)?\s*\d{3,}\b(?=\s*(drug|kill|victim|people|death|case|warrant|count|charge))/gi,
+    replacement: "[User-stated number — omitted from context]",
+  },
+  {
+    pattern:
+      /\b(given that|since|because|considering that)\s+[^,]+\b(killed|died|victims|convicted|sentenced|guilty|ordered)\b[^,]*/gi,
+    replacement: "[User-stated premise — omitted from context]",
+  },
+  {
+    pattern:
+      /\b(according to|sources say|it is known that|everyone knows|it has been reported|as we know|as established)\s+[^.!?]+[.!?]?/gi,
     replacement: "[User-stated claim — omitted from context]",
   },
   {
-    pattern: /\b(according to|sources say|it is known that|everyone knows)\s+[^.!?]+[.!?]/gi,
-    replacement: "[User-stated claim — omitted from context]",
-  },
-  {
-    pattern: /\b(the )?(\w+)\s+(ordered|authorized|directed)\s+[^.!?]+[.!?]/gi,
+    pattern:
+      /\b(duterte|du30|the president|he)\s+(ordered|authorized|directed|commanded|instructed)\b[^.!?]*/gi,
     replacement: "[User-stated claim — omitted from context]",
   },
   {
     pattern: /\b(duterte|du30)\s+(is|was)\s+(guilty|innocent|convicted|acquitted)\b/gi,
+    replacement: "[User-stated claim — omitted from context]",
+  },
+  {
+    pattern: /\b(there were|there are|there have been)\s+\d{3,}\s+\w+/gi,
     replacement: "[User-stated claim — omitted from context]",
   },
 ];

@@ -25,6 +25,8 @@ import {
 } from "./fact-check";
 import { sanitizeHistoryForContamination } from "./contamination-guard";
 import { isNormativeQuery, NORMATIVE_REFUSAL_MESSAGE } from "./normative-filter";
+import { runDeterministicJudge } from "./deterministic-judge";
+import { checkTranslationStability } from "./translation-stability";
 
 const MAX_ANSWER_TOKENS = 1024;
 const MAX_JUDGE_TOKENS = 256;
@@ -154,6 +156,8 @@ function askedAboutProsecutionOrDefence(query: string): boolean {
 }
 
 /** Call LLM-as-Judge to verify answer against retrieved chunks. */
+const JUDGE_MODEL = process.env.JUDGE_MODEL ?? "gpt-4o";
+
 async function judgeAnswer(
   rawAnswer: string,
   chunks: RetrievalChunk[],
@@ -163,7 +167,7 @@ async function judgeAnswer(
 ): Promise<{ verdict: "APPROVE" | "REJECT"; reason: string }> {
   const userMessage = buildJudgeUserMessage(rawAnswer, chunks, extraContext, conversationHistory);
   const res = await openai.chat.completions.create({
-    model: "gpt-4o-mini",
+    model: JUDGE_MODEL,
     messages: [
       { role: "system", content: JUDGE_SYSTEM_PROMPT },
       { role: "user", content: userMessage },
@@ -318,6 +322,14 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   if (langResult.language === "tl" || langResult.language === "taglish") {
     const translation = await translateToEnglish(effectiveQuery);
     if (translation.success) {
+      const stability = checkTranslationStability(effectiveQuery, translation.translatedText);
+      if (!stability.stable) {
+        logEvent("translation.stability_warning", "warn", {
+          warning: stability.warning,
+          original: effectiveQuery.slice(0, 100),
+          translated: translation.translatedText.slice(0, 100),
+        });
+      }
       effectiveQuery = translation.translatedText;
       originalQuery = opts.query;
     }
@@ -528,6 +540,20 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     const openai = getOpenAIClient();
     const judgeDisabled = process.env.DISABLE_JUDGE === "true";
     if (!judgeDisabled) {
+      const deterministicResult = runDeterministicJudge(answer, chunks, true);
+      if (!deterministicResult.pass) {
+        logEvent("judge.deterministic_reject", "warn", { reason: deterministicResult.reason });
+        const kbDate = await getKnowledgeBaseLastUpdated();
+        return {
+          answer:
+            "We couldn't verify this fact-check against our ICC records. The verdict reached may not be sufficiently supported by the retrieved documents. Try content with claims that relate more directly to the ICC case documents we have.",
+          citations: [],
+          warning: null,
+          verified: false,
+          knowledge_base_last_updated: kbDate,
+          responseLanguage,
+        };
+      }
       try {
         const judgeResult = await judgeAnswer(
           answer,
@@ -724,6 +750,20 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
 
   const sanitizedHistory = sanitizeHistory(conversationHistory.slice(-3));
   if (!judgeDisabled) {
+    const deterministicResult = runDeterministicJudge(verifiedAnswer, chunks, false);
+    if (!deterministicResult.pass) {
+      logEvent("judge.deterministic_reject", "warn", { reason: deterministicResult.reason });
+      return {
+        answer: FALLBACK_BLOCKED,
+        citations: [],
+        warning: null,
+        verified: false,
+        knowledge_base_last_updated: kbDate,
+        retrievalConfidence,
+        claimsVerified: claimResult.hadEnumerations ? claimResult.strippedClaims.length === 0 : undefined,
+        claimsStripped: claimResult.strippedClaims.length > 0 ? claimResult.strippedClaims.length : undefined,
+      };
+    }
     try {
       const judgeResult = await judgeAnswer(verifiedAnswer, chunks, openai, judgeExtraContext, sanitizedHistory);
       verdict = judgeResult.verdict;
