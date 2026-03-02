@@ -387,6 +387,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   effectiveQuery = neutralizeQuery(effectiveQuery);
 
   if (isNormativeQuery(effectiveQuery)) {
+    logEvent("normative.filtered", "info", { query_preview: effectiveQuery.slice(0, 80) });
     const kbDate = await getKnowledgeBaseLastUpdated();
     return {
       answer: NORMATIVE_REFUSAL_MESSAGE,
@@ -676,6 +677,10 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     /\b(has\s+.{1,30}(happened|started|begun|been\s+\w+ed)\s*(yet|already)?)\b|\b(is\s+there\s+(a|any)\s+\w+\s+(yet|already))\b|\b(when\s+will)\b|\b(has\s+.*been\s+scheduled)\b|\b(was\s+the\s+\w+\s+(granted|approved|denied|rejected|upheld|dismissed))\b|\b(has\s+(the\s+)?(trial|hearing|deferral|bail|admissibility)\s+(been\s+)?(started|granted|approved|scheduled|decided|resolved))\b/i;
 
   const isAbsenceQuery = ABSENCE_PATTERNS.test(effectiveQuery);
+  const isGuiltStatusQuery =
+    /\b(is|was)\s+(he|duterte|du30|the\s+accused)\s+(guilty|innocent|convicted|acquitted)\b/i.test(
+      effectiveQuery
+    ) || /\bguilty\s+ba\b/i.test(effectiveQuery);
 
   const kbDate = await getKnowledgeBaseLastUpdated();
   const systemPrompt = buildSystemPrompt({
@@ -688,6 +693,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     knowledgeBaseLastUpdated: kbDate,
     isAbsenceQuery,
     isDrugWarTermQuery,
+    isGuiltStatusQuery,
     responseLanguage,
     originalQuery,
   });

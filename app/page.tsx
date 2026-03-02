@@ -3,12 +3,16 @@
 /**
  * Chat page: sidebar + message list + input.
  * PRD §3 Journey 1, 2, 4. Task Group 8.
+ * cursor-false-decline-reduction §5: PromptChips, WhatCanIAsk, telemetry.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { ChatMessage, type Citation, type FactCheckResult } from "@/components/ChatMessage";
 import { ChatInput } from "@/components/ChatInput";
 import { ConversationSidebar } from "@/components/ConversationSidebar";
+import { PromptChips } from "@/components/PromptChips";
+import { WhatCanIAsk } from "@/components/WhatCanIAsk";
+import { logUiEvent } from "@/lib/log-client";
 
 type ResponseLanguage = "en" | "tl" | "taglish";
 
@@ -32,6 +36,8 @@ export default function Home() {
   const [dailyLimitNudge, setDailyLimitNudge] = useState(false);
   const [conversationExpired, setConversationExpired] = useState(false);
   const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>("en");
+  const [showPaste, setShowPaste] = useState(false);
+  const lastDeclineRef = useRef<{ query: string; timestamp: number } | null>(null);
   const sidebarRef = useRef<{ refetch: () => Promise<void> }>(null);
   const skipNextLoadRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -118,6 +124,14 @@ export default function Home() {
   }
 
   async function handleSend(query: string, pastedText?: string) {
+    if (lastDeclineRef.current && Date.now() - lastDeclineRef.current.timestamp < 60_000) {
+      logUiEvent("rephrase_after_decline", {
+        original_query: lastDeclineRef.current.query.slice(0, 50),
+        new_query: query.slice(0, 50),
+      });
+    }
+    lastDeclineRef.current = null;
+
     const userContent = pastedText ? `[Pasted text]\n${pastedText}\n\n${query}` : query;
     const userMsgId = "u-" + Date.now();
 
@@ -160,19 +174,20 @@ export default function Home() {
 
       if (data.dailyLimitReached) setDailyLimitNudge(true);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          message_id: "a-" + Date.now(),
-          role: "assistant",
-          content: data.answer,
-          citations: data.citations ?? [],
-          warning: data.warning ?? null,
-          knowledge_base_last_updated: data.knowledge_base_last_updated,
-          verified: data.verified,
-          factCheck: data.factCheck ?? null,
-        },
-      ]);
+      const assistantMsg = {
+        message_id: "a-" + Date.now(),
+        role: "assistant" as const,
+        content: data.answer,
+        citations: data.citations ?? [],
+        warning: data.warning ?? null,
+        knowledge_base_last_updated: data.knowledge_base_last_updated,
+        verified: data.verified,
+        factCheck: data.factCheck ?? null,
+      };
+      if (data.answer?.trim().startsWith("This is not addressed in current ICC records.")) {
+        lastDeclineRef.current = { query, timestamp: Date.now() };
+      }
+      setMessages((prev) => [...prev, assistantMsg]);
 
       if (data.conversationId && !conversationId) {
         skipNextLoadRef.current = true;
@@ -283,10 +298,16 @@ export default function Home() {
                 Try: &ldquo;What is Duterte charged with?&rdquo; or &ldquo;What does in absentia
                 mean?&rdquo; You can also paste text from an ICC document.
               </p>
+              <PromptChips
+                onSend={handleSend}
+                onOpenPaste={() => setShowPaste(true)}
+                disabled={loading}
+                onChipClick={(text) => logUiEvent("chip_clicked", { chip_text: text })}
+              />
             </div>
           ) : (
             <div className="space-y-4 p-6">
-              {messages.map((m) => (
+              {messages.map((m, i) => (
                 <ChatMessage
                   key={m.message_id}
                   role={m.role}
@@ -295,6 +316,15 @@ export default function Home() {
                   warning={m.warning}
                   knowledge_base_last_updated={m.knowledge_base_last_updated}
                   factCheck={m.factCheck}
+                  previousUserQuery={
+                    m.role === "assistant" && i > 0 && messages[i - 1].role === "user"
+                      ? (messages[i - 1].content.startsWith("[Pasted text]")
+                          ? messages[i - 1].content.replace(/^\[Pasted text\][\s\S]*?\n\n/, "").trim()
+                          : messages[i - 1].content
+                        ).slice(0, 50)
+                      : undefined
+                  }
+                  onDeclineShown={(qp) => logUiEvent("decline_shown", { query_preview: qp })}
                 />
               ))}
               {loading && (
@@ -314,6 +344,9 @@ export default function Home() {
           )}
         </div>
 
+        <div className="border-t border-gray-100">
+          <WhatCanIAsk onOpen={() => logUiEvent("what_can_i_ask_opened", {})} />
+        </div>
         {dailyLimitNudge && (
           <div className="border-t border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-800">
             You&apos;ve reached your suggested daily limit. You can still ask questions, but please
@@ -325,6 +358,8 @@ export default function Home() {
           disabled={loading}
           capExceeded={capExceeded}
           resetDate={resetDate}
+          showPaste={showPaste}
+          onShowPasteChange={setShowPaste}
         />
       </div>
     </div>

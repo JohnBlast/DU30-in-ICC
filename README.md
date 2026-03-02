@@ -43,8 +43,12 @@ RAG-powered Q&A app for the Duterte ICC case. Answers are grounded in official I
 | `npm run verify-legal-questions` | Test legal question coverage (22 questions) |
 | `npm run verify-retrieval-drift` | Compare retrieval to baseline |
 | `npm run verify-verdict-stability` | Fact-check verdict regression tests |
+| `npm run verify-adversarial-safeguards` | Adversarial + safeguard tests (S-1–S-8, SR-07–09) |
+| `npm run verify-false-decline` | False-decline reduction tests (FD-01–FD-15) |
+| `npm run verify-contamination-guard` | Contamination guard unit tests |
 | `npm run run-real-world-factchecks` | Run 15 real-world fact-check examples |
 | `npm run ingest-glossary` | Ingest glossary chunks |
+| `npm run tune-thresholds` | Run labeled queries for retrieval threshold tuning |
 | `npm run check-retrieval -- "<query>"` | Debug RAG retrieval for a query |
 
 ## Observability

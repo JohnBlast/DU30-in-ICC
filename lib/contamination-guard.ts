@@ -6,12 +6,25 @@
 
 const USER_FACT_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
   {
-    pattern: /\b\d{3,}\s*(killed|died|victims|people|casualties|dead|deaths?)\b/gi,
+    // Numbers with optional commas (30,000 or 30000) followed by keywords within a few words
+    pattern: /\b\d{1,3}(?:,\d{3})+\s+(?:\w+\s+){0,3}(killed|died|victims|people|casualties|dead|deaths?)\b/gi,
     replacement: "[User-stated number — omitted from context]",
   },
   {
+    // Same but without commas (plain digits, 3+ chars)
+    pattern: /\b\d{3,}\s+(?:\w+\s+){0,3}(killed|died|victims|people|casualties|dead|deaths?)\b/gi,
+    replacement: "[User-stated number — omitted from context]",
+  },
+  {
+    // Prefixed numbers with commas: "approximately 30,000" before domain keywords
     pattern:
-      /\b(approximately|around|about|at least|over|more than)?\s*\d{3,}\b(?=\s*(drug|kill|victim|people|death|case|warrant|count|charge))/gi,
+      /\b(approximately|around|about|at least|over|more than)?\s*\d{1,3}(?:,\d{3})+\b(?=\s+(?:\w+\s+){0,3}(drug|kill|victim|people|death|case|warrant|count|charge))/gi,
+    replacement: "[User-stated number — omitted from context]",
+  },
+  {
+    // Prefixed numbers without commas before domain keywords
+    pattern:
+      /\b(approximately|around|about|at least|over|more than)?\s*\d{3,}\b(?=\s+(?:\w+\s+){0,3}(drug|kill|victim|people|death|case|warrant|count|charge))/gi,
     replacement: "[User-stated number — omitted from context]",
   },
   {
@@ -34,6 +47,12 @@ const USER_FACT_PATTERNS: Array<{ pattern: RegExp; replacement: string }> = [
     replacement: "[User-stated claim — omitted from context]",
   },
   {
+    // "there were 30,000 ..." — comma-formatted
+    pattern: /\b(there were|there are|there have been)\s+\d{1,3}(?:,\d{3})+\s+\w+/gi,
+    replacement: "[User-stated claim — omitted from context]",
+  },
+  {
+    // "there were 30000 ..." — non-comma
     pattern: /\b(there were|there are|there have been)\s+\d{3,}\s+\w+/gi,
     replacement: "[User-stated claim — omitted from context]",
   },

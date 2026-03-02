@@ -282,6 +282,7 @@ GROUNDING:
 - ONLY cite facts from the ICC DOCUMENTS section below
 - Do NOT introduce facts from your training data — no charges, dates, names, or numbers that don't appear in the documents below
 - If you are unsure whether a detail is in the documents, re-read them before answering
+- When the user's claim contains a specific number (e.g., "30,000 were killed"), compare it against numbers in retrieved chunks. If the documents state a different number, cite the discrepancy in icc_says and use verdict FALSE. Do not silently omit the comparison.
 
 TRANSCRIPT vs. RULING DISTINCTION:
 Some ICC documents below are hearing transcripts (marked "— transcript" in source header). Transcript content represents:

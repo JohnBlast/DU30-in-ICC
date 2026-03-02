@@ -123,6 +123,7 @@ export interface BuildPromptOptions {
   knowledgeBaseLastUpdated: string;
   isAbsenceQuery?: boolean;
   isDrugWarTermQuery?: boolean;
+  isGuiltStatusQuery?: boolean;
   responseLanguage?: "en" | "tl" | "taglish";
   isFactCheck?: boolean;
   extractedClaims?: Array<{ extractedText: string; translatedText?: string }>;
@@ -141,6 +142,7 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
     knowledgeBaseLastUpdated,
     isAbsenceQuery,
     isDrugWarTermQuery,
+    isGuiltStatusQuery,
     responseLanguage = "en",
     isFactCheck,
     extractedClaims,
@@ -176,6 +178,15 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
   }
   if (isDrugWarTermQuery) {
     prompt += `\nQUERY TYPE NOTE: This query asks about a term or operation central to the ICC case against Duterte. The retrieved documents will mention this term in context (describing victims, operations, legal proceedings, policy programs). You MUST synthesize a factual description from these contextual mentions — explain what the term refers to based on how ICC documents describe it. Do NOT decline with "This is not addressed." The chunks contain the information needed.\n`;
+  }
+  if (isGuiltStatusQuery) {
+    prompt += `\nQUERY TYPE: guilt/innocence status
+The user is asking about guilt or innocence. Do NOT express an opinion. Instead, answer with the PROCEDURAL STATUS of the case:
+- State the current stage of proceedings (e.g., confirmation of charges)
+- State that no verdict has been rendered (if true)
+- Cite the document establishing the current case stage
+- NEVER use the words "guilty", "innocent", "not guilty", or "not innocent"
+- Use phrasing like: "No verdict has been rendered in this case. The proceedings are currently at the [stage] phase [N]."\n`;
   }
   const hasTranscriptChunks = chunks.some(
     (c) => (c.metadata?.document_type as string) === "transcript"

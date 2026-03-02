@@ -375,9 +375,11 @@ export async function retrieve(options: RetrieveOptions): Promise<RetrieveResult
   if (usedFallback && !usedDualIndexFallback) {
     retrievalConfidence = "low";
   } else if (usedDualIndexFallback) {
-    retrievalConfidence = "medium";
-  } else if (topChunks.length <= 1) {
+    retrievalConfidence = topChunks.length >= 2 ? "medium" : "low";
+  } else if (topChunks.length === 0) {
     retrievalConfidence = "low";
+  } else if (topChunks.length === 1) {
+    retrievalConfidence = bothMethods ? "medium" : "low";
   } else if (bothMethods && topChunks.length >= 2) {
     retrievalConfidence = "high";
   } else {

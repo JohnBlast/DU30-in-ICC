@@ -25,12 +25,12 @@ const INTENT_PROMPT = `You classify user questions about the Duterte ICC case.
 Respond with exactly one of these words: case_facts, case_timeline, legal_concept, procedure, glossary, paste_text, fact_check, out_of_scope
 
 - fact_check: User pasted social media content for claim verification (not ICC document text)
-- case_facts: "What is Duterte charged with?", "Who are the victims?", "How many counts?", "What are the evidences against Duterte?", "Who are the judges?", "Is Du30 fit to stand trial?", "Who pays for Duterte's defence?", "Where is Duterte detained?", "Did Duterte surrender or was he arrested?", "measures to facilitate attendance", "What did the prosecutor say at the hearing?", "What was the defense's argument?", "What were the closing statements of the defence during the confirmation of charges?", "What is Tokhang?", "What were the operations during the war on drugs?", "What is the Davao Death Squad?", "How many were killed in the drug war?", "What is Oplan Double Barrel?"
-- case_timeline: "When did the ICC open the investigation?", "What's the timeline?"
-- legal_concept: "What is Article 7?", "What are crimes against humanity?"
-- procedure: "What happens after confirmation of charges?", "What is the next step in the case?", "Can he be tried in absentia?", "What is an Article 18 deferral?", "Can the Philippines challenge admissibility?", "What is complementarity?"
-- glossary: "What does in absentia mean?", "What is proprio motu?"
-- out_of_scope: "Was Duterte justified?", "What's his favorite color?", "Who is [REDACTED]?"
+- case_facts: "What is Duterte charged with?", "Who are the victims?", "How many counts?", "What are the evidences against Duterte?", "Who are the judges?", "Is Du30 fit to stand trial?", "Who pays for Duterte's defence?", "Where is Duterte detained?", "Did Duterte surrender or was he arrested?", "measures to facilitate attendance", "What did the prosecutor say at the hearing?", "What was the defense's argument?", "What were the closing statements of the defence during the confirmation of charges?", "What is Tokhang?", "What were the operations during the war on drugs?", "What is the Davao Death Squad?", "How many were killed in the drug war?", "What is Oplan Double Barrel?", "What are the charges?", "What evidence is there?", "What's the status of the case?", "Has he been arrested?", "What are Duterte's rights?", "What are the allegations against Duterte?", "Who is the judge?", "Is there a trial yet?"
+- case_timeline: "When did the ICC open the investigation?", "What's the timeline?", "When was the arrest warrant issued?", "When did the Philippines withdraw?", "What happened at the February 2026 hearing?", "Key dates of the case?"
+- legal_concept: "What is Article 7?", "What are crimes against humanity?", "What does the Rome Statute say about withdrawal?", "What is complementarity?", "What is an Article 18 deferral?", "What is indirect co-perpetration?", "What are the elements of murder as a crime against humanity?"
+- procedure: "What happens after confirmation of charges?", "What is the next step in the case?", "Can he be tried in absentia?", "What is an Article 18 deferral?", "Can the Philippines challenge admissibility?", "What is complementarity?", "What happens after this?", "Can the case be dismissed?", "What steps occur if charges are confirmed?"
+- glossary: "What does in absentia mean?", "What is proprio motu?", "What does EJK mean?", "What is the DCC?", "Define extrajudicial killing"
+- out_of_scope: "Was Duterte justified?", "What's his favorite color?", "Who is [REDACTED]?", "Is the ICC biased?", "Compare Duterte to Marcos", "Should Duterte be punished?"
 
 Nothing else. Just the single category word.`;
 
@@ -85,6 +85,11 @@ function layer2Regex(cleanedQuery: string): { intent: IntentCategory; confidence
   if (/\bfigure\s+out\b.*\b(name|who)\b/i.test(q)) return { intent: "out_of_scope", confidence: "high" };
   if (/\bde-?anonymize\b/i.test(q)) return { intent: "out_of_scope", confidence: "high" };
   if (/\bwho\s+is\s+the\s+witness\b.*\b(page|section)\d+/i.test(q)) return { intent: "out_of_scope", confidence: "high" };
+
+  // Guilt/innocence status (P1-2) — route to case_facts with procedural-status treatment; BEFORE other patterns
+  if (/\b(is|was)\s+(he|duterte|du30|the\s+accused)\s+(guilty|innocent|convicted|acquitted)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\bguilty\s+ba\b/i.test(q)) return { intent: "case_facts", confidence: "high" };
 
   // case_facts patterns
   if (/(surrender|arrested|arrest)\s*(duterte|du30|him|accused)|(duterte|du30)\s*(surrender|arrested|arrest)/i.test(q)) return { intent: "case_facts", confidence: "high" };

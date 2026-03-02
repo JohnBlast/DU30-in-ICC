@@ -286,7 +286,8 @@
 | **LangSmith** | `lib/openai-client.ts` | Wraps OpenAI with `wrapOpenAI` when `LANGSMITH_TRACING=true` or `LANGCHAIN_TRACING_V2=true`. Uses `LANGSMITH_API_KEY` or `LANGCHAIN_API_KEY`. Traces show in Runs; Threads/Evaluator empty (normal). |
 | **Database** | `supabase/schema.sql`, `migrations/002_*` | `conversations.is_bookmarked` (boolean). Run migration if not applied. |
 | **Intent fallbacks** | `lib/intent-classifier.ts` | Surrender/arrest queries (e.g. "Did Duterte surrender or was he arrested?") → `case_facts`. See nl-interpretation.md §2.1. |
-| **Verification scripts** | `scripts/verify-*.ts` | `verify-guardrails`, `verify-e2e`, `verify-legal-questions`. Run before deployment. |
+| **Verification scripts** | `scripts/verify-*.ts` | `verify-guardrails`, `verify-e2e`, `verify-legal-questions`, `verify-adversarial-safeguards`, `verify-false-decline`, `verify-contamination-guard`. Run before deployment. |
+| **FD test fixes** | `prompts/cursor-fd-test-fixes.md` | Retrieval confidence logic (1-chunk both-methods→medium); contamination guard comma-formatted numbers ("30,000"). See system-review-for-llm.md §9.14. |
 
 ### Key Files
 
@@ -304,7 +305,7 @@
 3. Sidebar: delete and bookmark icons visible; long titles truncate with tooltip; on desktop, sidebar stays open when switching conversations
 4. Hover message — copy icon appears
 5. Footer disclaimer visible; chat input not blocked
-6. `npm run verify-guardrails` and `npm run verify-e2e` — both pass; optional: `npm run verify-legal-questions`
+6. `npm run verify-guardrails` and `npm run verify-e2e` — both pass; optional: `npm run verify-legal-questions`, `npm run verify-adversarial-safeguards`, `npm run verify-false-decline`, `npm run verify-contamination-guard`
 
 ---
 

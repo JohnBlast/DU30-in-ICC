@@ -5,7 +5,7 @@
  * User messages: right-aligned. Assistant: left-aligned.
  */
 
-import { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { splitGlossaryTerms } from "@/lib/glossary-terms";
 
@@ -50,6 +50,9 @@ interface ChatMessageProps {
   knowledge_base_last_updated?: string;
   verified?: boolean;
   factCheck?: FactCheckResult | null;
+  /** When assistant message is a flat decline, used for telemetry (query preview). */
+  previousUserQuery?: string;
+  onDeclineShown?: (queryPreview: string) => void;
 }
 
 /** Strip ingest-added [Section: ...] prefixes from chunk/answer content for cleaner display. */
@@ -188,6 +191,8 @@ function VerdictBadge({ verdict, evidenceType }: { verdict: ClaimVerdict; eviden
   );
 }
 
+const FLAT_DECLINE = "This is not addressed in current ICC records.";
+
 export function ChatMessage({
   role,
   content,
@@ -195,13 +200,24 @@ export function ChatMessage({
   warning,
   knowledge_base_last_updated,
   factCheck,
+  previousUserQuery,
+  onDeclineShown,
 }: ChatMessageProps) {
   const [activeCitation, setActiveCitation] = useState<Citation | null>(null);
+  const declineShownRef = useRef(false);
+
+  const isUser = role === "user";
+  const isDecline = !isUser && content.trim().startsWith(FLAT_DECLINE);
+  useEffect(() => {
+    if (isDecline && onDeclineShown && !declineShownRef.current && previousUserQuery) {
+      declineShownRef.current = true;
+      onDeclineShown(previousUserQuery.slice(0, 50));
+    }
+  }, [isDecline, onDeclineShown, previousUserQuery]);
   const [copied, setCopied] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [pastedExpanded, setPastedExpanded] = useState(false);
 
-  const isUser = role === "user";
   const parsedUser = isUser ? parseUserContent(content) : null;
 
   async function handleCopy() {
@@ -396,6 +412,12 @@ export function ChatMessage({
           </div>
         )}
 
+        {isDecline && (
+          <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-gray-700">
+            💡 Try asking about: the charges, the timeline, ICC procedures, or legal terms.
+            Or paste a social media post to fact-check it.
+          </div>
+        )}
         {!isUser && (
           <p className="mt-3 text-xs text-gray-500">
             AI-generated summary based on ICC official documents. Not legal advice.

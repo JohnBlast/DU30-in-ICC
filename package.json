@@ -30,7 +30,9 @@
     "run-real-world-factchecks": "tsx --env-file=.env.local scripts/run-real-world-factchecks.ts",
     "ingest-glossary": "tsx --env-file=.env.local scripts/ingest-glossary.ts",
     "verify-verdict-stability": "tsx --env-file=.env.local scripts/verify-verdict-stability.ts",
-    "verify-false-decline": "tsx --env-file=.env.local scripts/verify-false-decline.ts"
+    "verify-false-decline": "tsx --env-file=.env.local scripts/verify-false-decline.ts",
+    "tune-thresholds": "tsx --env-file=.env.local scripts/tune-thresholds.ts",
+    "verify-contamination-guard": "tsx scripts/verify-contamination-guard.ts"
   },
   "dependencies": {
     "@langchain/textsplitters": "^1.0.1",
