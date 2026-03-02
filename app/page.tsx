@@ -13,6 +13,8 @@ import { ConversationSidebar } from "@/components/ConversationSidebar";
 import { PromptChips } from "@/components/PromptChips";
 import { WhatCanIAsk } from "@/components/WhatCanIAsk";
 import { logUiEvent } from "@/lib/log-client";
+import { Button } from "@primer/react";
+import Link from "next/link";
 
 type ResponseLanguage = "en" | "tl" | "taglish";
 
@@ -229,15 +231,15 @@ export default function Home() {
       />
 
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4">
+        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
           <div className="flex items-center gap-4">
             <h1 className="text-xl font-bold text-gray-900">The Docket</h1>
-            <a
+            <Link
               href="/glossary"
-              className="text-sm font-medium text-gray-600 hover:text-gray-900"
+              className="text-sm font-medium text-gray-600 no-underline transition-colors hover:text-gray-900"
             >
               Glossary
-            </a>
+            </Link>
             <div className="flex items-center gap-2">
               <span className="text-sm text-gray-500">Response:</span>
               <select
@@ -254,7 +256,7 @@ export default function Home() {
                     });
                   }
                 }}
-                className="rounded border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-700"
+                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               >
                 <option value="en">English</option>
                 <option value="tl">Tagalog</option>
@@ -263,12 +265,9 @@ export default function Home() {
             </div>
           </div>
           <form action="/api/auth/logout" method="POST">
-            <button
-              type="submit"
-              className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
-            >
+            <Button variant="default" type="submit" size="small">
               Sign out
-            </button>
+            </Button>
           </form>
         </header>
 
@@ -281,17 +280,13 @@ export default function Home() {
               <p className="mt-2 max-w-md text-sm text-gray-600">
                 Please start a new conversation.
               </p>
-              <button
-                type="button"
-                onClick={handleNewConversation}
-                className="mt-4 rounded-md bg-gray-900 px-4 py-2 text-sm font-medium text-white hover:bg-gray-800"
-              >
-                New conversation
-              </button>
+            <Button variant="primary" onClick={handleNewConversation} className="mt-4">
+              New conversation
+            </Button>
             </div>
           ) : messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-              <h2 className="text-lg font-semibold text-gray-900">
+              <h2 className="text-xl font-semibold text-gray-900">
                 Ask a question about the Duterte ICC case
               </h2>
               <p className="mt-2 max-w-md text-sm text-gray-600">
@@ -306,7 +301,7 @@ export default function Home() {
               />
             </div>
           ) : (
-            <div className="space-y-4 p-6">
+            <div className="space-y-6 p-6">
               {messages.map((m, i) => (
                 <ChatMessage
                   key={m.message_id}
@@ -329,8 +324,8 @@ export default function Home() {
               ))}
               {loading && (
                 <div className="flex justify-start">
-                  <div className="flex items-center gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3 shadow-sm">
-                    <div className="flex gap-1">
+                  <div className="flex items-center gap-3 rounded-xl border border-gray-200 bg-white px-5 py-3.5 shadow-sm">
+                    <div className="flex gap-1.5">
                       <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500 [animation-delay:-0.3s]" />
                       <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500 [animation-delay:-0.15s]" />
                       <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500" />

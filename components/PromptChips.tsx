@@ -3,7 +3,10 @@
 /**
  * First-run prompt chips (cursor-false-decline-reduction.md §5.1).
  * Visible when conversation is empty. Clicking submits the query.
+ * Styled with Primer design system.
  */
+
+import { Button } from "@primer/react";
 
 interface PromptChipsProps {
   onSend: (query: string, pastedText?: string) => void;
@@ -37,17 +40,18 @@ export function PromptChips({
   }
 
   return (
-    <div className="flex flex-wrap justify-center gap-2 p-4">
+    <div className="flex flex-wrap justify-center gap-3 p-6">
       {CHIPS.map((chip) => (
-        <button
+        <Button
           key={chip.text}
-          type="button"
+          variant="default"
+          size="medium"
           onClick={() => handleClick(chip)}
           disabled={disabled}
-          className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm transition-colors hover:border-blue-400 hover:bg-blue-50 hover:text-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
+          className="rounded-full transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
         >
           {chip.text}
-        </button>
+        </Button>
       ))}
     </div>
   );

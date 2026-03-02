@@ -234,7 +234,7 @@ export function ChatMessage({
   return (
     <div className={`flex w-full min-w-0 ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`group relative max-w-[85%] overflow-visible rounded-lg px-4 py-3 ${
+        className={`group relative max-w-[85%] overflow-visible rounded-xl px-4 py-3 shadow-sm ${
           isUser
             ? "bg-blue-600 text-white"
             : "bg-gray-100 text-gray-900"
@@ -249,7 +249,7 @@ export function ChatMessage({
         {!isUser && factCheck && (
           <div className="mb-2">
             <div
-              className="flex cursor-pointer items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3"
+              className="flex cursor-pointer items-center justify-between rounded-lg border border-gray-200 bg-white px-4 py-3 transition-colors hover:bg-gray-50"
               onClick={() => setExpanded(!expanded)}
             >
               <div className="flex items-center gap-3">
@@ -259,7 +259,7 @@ export function ChatMessage({
                 </span>
               </div>
               <svg
-                className={`h-5 w-5 text-gray-400 transition-transform ${expanded ? "rotate-180" : ""}`}
+                className={`h-5 w-5 shrink-0 text-gray-400 transition-transform duration-200 ${expanded ? "rotate-180" : ""}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -305,7 +305,7 @@ export function ChatMessage({
                                       key={cit.marker}
                                       type="button"
                                       onClick={() => setActiveCitation(cit)}
-                                      className="inline-flex cursor-pointer rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-800 hover:bg-blue-200"
+                                      className="inline-flex cursor-pointer rounded bg-blue-100 px-1.5 py-0.5 text-xs font-medium text-blue-800 transition-colors hover:bg-blue-200"
                                     >
                                       {cit.marker}
                                     </button>
@@ -327,11 +327,11 @@ export function ChatMessage({
                               Statement of opinion — not a verifiable factual claim.
                             </p>
                           ) : c.iccSays ? (
-                            <div className="mt-2 rounded bg-gray-50 px-3 py-2">
-                              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                            <div className="mt-2 rounded border border-gray-200 bg-gray-100 px-3 py-2">
+                              <p className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-500">
                                 ICC Documents
                               </p>
-                              <p className="text-sm leading-relaxed text-gray-700">{c.iccSays}</p>
+                              <p className="text-sm leading-relaxed text-gray-900">{c.iccSays}</p>
                             </div>
                           ) : null}
                         </div>
@@ -429,7 +429,7 @@ export function ChatMessage({
         <button
           type="button"
           onClick={handleCopy}
-          className={`absolute right-3 top-3 z-10 rounded p-1.5 opacity-0 transition-opacity pointer-events-none group-hover:opacity-100 group-hover:pointer-events-auto hover:bg-black/10 ${
+          className={`absolute right-3 top-3 z-10 rounded p-1.5 opacity-60 transition-opacity hover:opacity-100 focus:opacity-100 focus:outline-none group-hover:opacity-100 hover:bg-black/10 ${
             isUser ? "text-white/90 hover:bg-white/20" : "text-gray-600 hover:bg-black/5"
           }`}
           title={factCheck ? "Copy fact-check" : "Copy"}
@@ -473,8 +473,8 @@ export function ChatMessage({
               </button>
             </div>
             <p className="mt-1 text-xs text-gray-500">{activeCitation.date_published}</p>
-            <div className="mt-4 rounded-lg bg-gray-50 p-4">
-              <p className="text-sm leading-relaxed text-gray-700">
+            <div className="mt-4 rounded-lg border border-gray-200 bg-gray-100 p-4">
+              <p className="text-sm leading-relaxed text-gray-900">
                 {stripSectionPrefix(activeCitation.source_passage)}
               </p>
             </div>
@@ -483,7 +483,7 @@ export function ChatMessage({
                 href={activeCitation.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                className="mt-4 inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium !text-white hover:bg-blue-700"
               >
                 View full document
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

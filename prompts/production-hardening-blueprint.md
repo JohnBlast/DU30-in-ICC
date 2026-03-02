@@ -799,31 +799,31 @@ Post-launch: If flagged cases exceed 5% of Filipino inputs, implement dual-langu
 
 ### P0 — Must Fix Before Public Launch
 
-| Item | Description | Effort | Justification |
-|------|-------------|--------|---------------|
-| **Causal attribution: sentence-window co-occurrence** | Replace chunk-level check with 3-sentence window in attribution verifier | 1.5 days | Closes the #1 catastrophic failure: VERIFIED for stitched causation claims. Adversarial actors will test this on day 1. |
-| **Causal attribution: expanded verb taxonomy** | Add indirect phrasing, modes of liability, phrasal patterns | 0.5 days | "Bore responsibility for" and "had effective command over" are how ICC charges are actually phrased. Missing them creates false negatives in the attribution check. |
-| **Causal attribution: allegation-source compound** | When chunk is transcript/filing AND sentence has allegation verbs, block VERIFIED | 0.5 days | Prevents "prosecution alleges X" → "X is verified." Direct path to misrepresentation. |
-| **Judge refactor: Layer 1 deterministic checks** | Move prohibited terms, citation bounds, [REDACTED] to code | 1 day | Reduces Judge prompt from ~2000 to ~600 tokens. Deterministic checks are 100% reliable; current Judge catches them ~95%. |
-| **Judge refactor: reduced-scope prompt** | Rewrite Judge to 4 conditions | 0.5 days | Fewer conditions = more consistent enforcement. |
-| **Multi-turn contamination: expanded patterns** | Add premise-framing, standalone numbers, assistant echo stripping | 1 day | User-seeded "30,000" in turn 1 can contaminate turn 3 answer. Adversarial vector in political environment. |
-| **Normative filter: expanded patterns** | Add "objectively", "would you agree", rhetorical, comparative, sovereignty-flavored | 0.5 days | "Objectively, was the ICC biased?" bypasses current filter. Quick fix, high value. |
-| **Glossary chunk injection** | Create and ingest 15–20 synthetic glossary chunks | 1 day | Fixes vector-0 for Tokhang/DDS/Double Barrel. Minimal risk, additive change. |
+| Item | Description | Effort | Status |
+|------|-------------|--------|--------|
+| **Causal attribution: sentence-window co-occurrence** | Replace chunk-level check with 3-sentence window in attribution verifier | 1.5 days | ✅ Implemented |
+| **Causal attribution: expanded verb taxonomy** | Add indirect phrasing, modes of liability, phrasal patterns | 0.5 days | ✅ Implemented |
+| **Causal attribution: allegation-source compound** | When chunk is transcript/filing AND sentence has allegation verbs, block VERIFIED | 0.5 days | ✅ Implemented |
+| **Judge refactor: Layer 1 deterministic checks** | Move prohibited terms, citation bounds, [REDACTED] to code | 1 day | ✅ Implemented |
+| **Judge refactor: reduced-scope prompt** | Rewrite Judge to 4 conditions | 0.5 days | ✅ Implemented |
+| **Multi-turn contamination: expanded patterns** | Add premise-framing, standalone numbers, assistant echo stripping | 1 day | ✅ Implemented |
+| **Normative filter: expanded patterns** | Add "objectively", "would you agree", rhetorical, comparative, sovereignty-flavored | 0.5 days | ✅ Implemented |
+| **Glossary chunk injection** | Create and ingest 14 synthetic glossary chunks | 1 day | ✅ Implemented |
 
-**P0 Total**: ~6.5 days
+**P0 Total**: ~6.5 days — **ALL COMPLETE**
 
 ### P1 — Important But Not Existential
 
-| Item | Description | Effort | Justification |
-|------|-------------|--------|---------------|
-| **Semantic citation validation** | Mini proposition verifier for high-stakes citations | 2 days | Closes the 40%-overlap gap for causal claims. Lower priority than attribution engine because attribution engine catches the worst cases. |
-| **Deterministic D2/D3 decomposition** | Subordinate clause and causal chain splitting in code | 1.5 days | Prevents "Since X, Y" from being treated as single claim. LLM may still catch these but deterministic is more reliable. |
-| **Deterministic D5/D6 decomposition** | Temporal sequence and exclusivity splitting in code | 1 day | Completeness of decomposition pipeline. |
-| **Judge model upgrade** | gpt-4o for Judge and fact-check verification | 0.5 days (config change) | Stronger reasoning for remaining LLM-evaluated conditions. Cost increase justified for legal system. |
-| **Verdict stability tests** | Add verdict and answer phrase stability to drift monitoring | 2 days | Catches silent verdict drift across model/prompt changes. |
-| **Translation stability: back-translation check** | Lightweight modal/voice preservation audit | 1.5 days | Flags Filipino→English translation drift. Logging only at launch. |
+| Item | Description | Effort | Status |
+|------|-------------|--------|--------|
+| **Semantic citation validation** | Mini proposition verifier for high-stakes citations | 2 days | Pending |
+| **Deterministic D2/D3 decomposition** | Subordinate clause and causal chain splitting in code | 1.5 days | ✅ Implemented |
+| **Deterministic D5/D6 decomposition** | Temporal sequence and exclusivity splitting in code | 1 day | Pending |
+| **Judge model upgrade** | gpt-4o for Judge and fact-check verification | 0.5 days (config change) | ✅ Implemented |
+| **Verdict stability tests** | Add verdict and answer phrase stability to drift monitoring | 2 days | ✅ Implemented |
+| **Translation stability: back-translation check** | Lightweight modal/voice preservation audit | 1.5 days | ✅ Implemented |
 
-**P1 Total**: ~8.5 days
+**P1 Total**: ~8.5 days — **4 of 6 COMPLETE**
 
 ### P2 — Quality Optimization
 

@@ -5,6 +5,7 @@
  */
 
 export default function Error({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- required by Next.js error boundary signature
   error,
   reset,
 }: {

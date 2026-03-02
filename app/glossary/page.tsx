@@ -3,9 +3,11 @@
 /**
  * Glossary of ICC legal and Latin terms.
  * Links from answers point here. Users can also browse.
+ * Styled with Primer design system.
  */
 
 import Link from "next/link";
+import { Button } from "@primer/react";
 
 const TERMS: Array<{ slug: string; term: string; definition: string }> = [
   {
@@ -84,12 +86,9 @@ export default function GlossaryPage() {
             The Docket
           </Link>
           <form action="/api/auth/logout" method="POST">
-            <button
-              type="submit"
-              className="rounded-md bg-gray-100 px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-200"
-            >
+            <Button variant="default" type="submit" size="small">
               Sign out
-            </button>
+            </Button>
           </form>
         </div>
       </header>

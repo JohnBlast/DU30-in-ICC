@@ -7,7 +7,37 @@
   --background-rgb: 255, 255, 255;
 }
 
+/* Full viewport height: use fixed units so layout works even with Primer's wrappers.
+   dvh = dynamic viewport (better for Safari mobile when address bar shows/hides) */
+html {
+  height: 100%;
+  min-height: 100vh;
+}
+
 body {
+  height: 100vh;
+  min-height: 100vh;
+  min-height: 100dvh; /* Safari/iOS: use dynamic viewport when supported */
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-rgb));
+}
+
+/* Make Primer's wrappers (ThemeProvider, BaseStyles) fill flex container so main gets height */
+body > div > *,
+body > div > * > * {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* UX: smooth scroll in message area */
+.overflow-auto {
+  scroll-behavior: smooth;
+}
+
+/* UX: visible focus ring for keyboard navigation (low specificity to not override Primer) */
+:where(button, input, select, textarea, a):focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
 }

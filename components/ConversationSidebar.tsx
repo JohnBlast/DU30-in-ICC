@@ -4,9 +4,12 @@
  * Sliding sidebar with conversation list, New Conversation, delete, bookmark.
  * Collapses on narrow viewports; truncates long titles with hover tooltip.
  * On desktop: stays open when switching conversations. On mobile: closes on select.
+ * Styled with Primer design system.
  */
 
 import { useEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
+import { Button } from "@primer/react";
+import { TrashIcon, BookmarkIcon, XIcon, ListUnorderedIcon } from "@primer/octicons-react";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -50,8 +53,8 @@ function ConversationItem({
           onSelect();
         }}
         title={c.title}
-        className={`min-w-0 flex-1 rounded px-3 py-2 text-left text-sm hover:bg-gray-200 ${
-          currentId === c.conversation_id ? "bg-gray-200 font-medium" : ""
+        className={`min-w-0 flex-1 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-gray-200 ${
+          currentId === c.conversation_id ? "bg-gray-200 font-medium" : "hover:bg-gray-100"
         }`}
       >
         <span className="block min-w-0 truncate">{c.title}</span>
@@ -60,24 +63,20 @@ function ConversationItem({
         <button
           type="button"
           onClick={onDelete}
-          className="rounded p-1 text-gray-500 hover:bg-red-100 hover:text-red-600"
+          className="rounded p-1.5 text-gray-500 transition-colors hover:bg-red-100 hover:text-red-600"
           title="Delete"
           aria-label="Delete conversation"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-          </svg>
+          <TrashIcon size={16} />
         </button>
         <button
           type="button"
           onClick={onBookmark}
-          className={`rounded p-1 ${c.is_bookmarked ? "text-amber-500" : "text-gray-500 hover:bg-amber-50 hover:text-amber-600"}`}
+          className={`rounded p-1.5 transition-colors ${c.is_bookmarked ? "text-amber-500" : "text-gray-500 hover:bg-amber-50 hover:text-amber-600"}`}
           title={c.is_bookmarked ? "Unbookmark" : "Bookmark"}
           aria-label={c.is_bookmarked ? "Unbookmark" : "Bookmark"}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill={c.is_bookmarked ? "currentColor" : "none"} viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
-          </svg>
+          <BookmarkIcon size={16} />
         </button>
       </div>
     </li>
@@ -149,9 +148,7 @@ export const ConversationSidebar = forwardRef<
         }`}
         aria-label="Open conversation list"
       >
-        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-gray-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-        </svg>
+        <ListUnorderedIcon size={20} />
       </button>
 
       {/* Backdrop when sidebar open on mobile */}
@@ -161,7 +158,7 @@ export const ConversationSidebar = forwardRef<
         aria-label="Close sidebar"
         onClick={() => setIsOpen(false)}
         onKeyDown={(e) => e.key === "Escape" && setIsOpen(false)}
-        className={`fixed inset-0 z-30 bg-black/20 md:hidden ${isOpen ? "block" : "hidden"}`}
+        className={`fixed inset-0 z-30 bg-black/20 transition-opacity duration-200 md:hidden ${isOpen ? "block" : "hidden"}`}
       />
 
       <aside
@@ -171,38 +168,28 @@ export const ConversationSidebar = forwardRef<
           ${isOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0 md:w-0 md:overflow-hidden md:border-0 md:min-w-0"}`}
       >
         <div className="flex items-center justify-between border-b border-gray-200 p-2">
-          <button
-            type="button"
-            onClick={onNew}
-            className="flex-1 rounded-md bg-blue-600 py-2 text-sm font-medium text-white hover:bg-blue-700"
-          >
+          <Button variant="primary" size="medium" className="flex-1 transition-opacity hover:opacity-95 active:opacity-90" onClick={onNew}>
             New Conversation
-          </button>
+          </Button>
           <button
             type="button"
             onClick={() => setIsOpen(false)}
             className="ml-2 rounded p-1.5 text-gray-500 hover:bg-gray-200 md:hidden"
             aria-label="Close sidebar"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <XIcon size={20} />
           </button>
         </div>
 
       <div className="flex-1 overflow-auto px-2 pb-4">
         {loading ? (
-          <p className="px-2 py-4 text-sm text-gray-500">Loading…</p>
+          <p className="px-2 py-4 text-sm text-gray-500 animate-pulse">Loading…</p>
         ) : fetchError ? (
           <div className="px-2 py-4">
             <p className="text-sm text-red-600">{fetchError}</p>
-            <button
-              type="button"
-              onClick={refetch}
-              className="mt-2 text-sm text-blue-600 hover:underline"
-            >
+            <Button variant="link" size="small" onClick={refetch} className="mt-2">
               Retry
-            </button>
+            </Button>
           </div>
         ) : conversations.length === 0 ? (
           <p className="px-2 py-4 text-sm text-gray-500">No conversations yet</p>

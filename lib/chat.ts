@@ -520,7 +520,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
       ragIndexes,
       intent,
     });
-    const { chunks, retrievalConfidence } = retrieveResult;
+    const { chunks } = retrieveResult;
 
     if (chunks.length === 0) {
       logEvent("chat.flat_decline", "warn", { intent: "fact_check", reason: "chunks=0" });

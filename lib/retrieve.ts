@@ -7,7 +7,8 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { getOpenAIClient } from "./openai-client";
 import { logEvent } from "./logger";
 
-/** @deprecated Use getThresholds(intent).primary */
+/** @deprecated Use getThresholds(intent).primary - kept for backward compatibility */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const SIMILARITY_THRESHOLD = 0.58;
 const PRE_RERANK_TOP_K = 10;
 

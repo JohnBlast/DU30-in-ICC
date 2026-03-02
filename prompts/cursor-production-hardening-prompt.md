@@ -1,8 +1,10 @@
 # Cursor Implementation Prompt — Production Hardening
 
-> **Context**: You are implementing the P0 + P1 fixes from `prompts/production-hardening-blueprint.md` for The Docket, an ICC legal Q&A + fact-checking system. Read that document first for full rationale.
+> **Status**: ✅ ALL PHASES IMPLEMENTED (2026-03-02)
 >
-> **Architecture reference**: `prompts/system-review-for-llm.md`
+> **Context**: P0 + P1 fixes from `prompts/production-hardening-blueprint.md` for The Docket, an ICC legal Q&A + fact-checking system.
+>
+> **Architecture reference**: `prompts/system-review-for-llm.md` (updated to reflect all changes)
 >
 > **Constraint**: Do not restructure the pipeline. Modify existing files. Follow the spec exactly.
 

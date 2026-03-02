@@ -37,6 +37,9 @@
   "dependencies": {
     "@langchain/textsplitters": "^1.0.1",
     "@mendable/firecrawl-js": "^4.15.0",
+    "@primer/octicons-react": "^19.22.0",
+    "@primer/primitives": "^11.5.1",
+    "@primer/react": "^38.13.0",
     "@supabase/supabase-js": "^2.98.0",
     "bcrypt": "^6.0.0",
     "jose": "^6.1.3",

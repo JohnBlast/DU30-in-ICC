@@ -3,16 +3,17 @@
 /**
  * Login page — username + password form.
  * PRD §4 (Auth), Task 7.1.
+ * Styled with Primer design system.
+ * Uses native form POST so server returns 303 redirect with cookie; no client-side redirect.
  */
 
 import { useState, useEffect } from "react";
+import { Button, FormControl, TextInput } from "@primer/react";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [signedOut, setSignedOut] = useState(false);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -20,38 +21,19 @@ export default function LoginPage() {
     if (params.get("signed_out") === "1") {
       setSignedOut(true);
       window.history.replaceState(null, "", "/login");
-    } else if (window.location.search === "?") {
-      window.history.replaceState(null, "", "/login");
+    } else {
+      const err = params.get("error");
+      if (err) {
+        setError(decodeURIComponent(err));
+        window.history.replaceState(null, "", "/login");
+      } else if (window.location.search === "?") {
+        window.history.replaceState(null, "", "/login");
+      }
     }
   }, []);
 
-  async function handleSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    setError("");
+  function handleSubmit() {
     setLoading(true);
-
-    try {
-      const res = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
-        credentials: "same-origin",
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(data.error ?? "Login failed");
-        setLoading(false);
-        return;
-      }
-
-      // Full page navigation so cookie is sent and middleware sees session
-      window.location.href = "/";
-    } catch {
-      setError("Login failed. Please try again.");
-      setLoading(false);
-    }
   }
 
   return (
@@ -71,38 +53,33 @@ export default function LoginPage() {
           training or shared with third parties.
         </div>
 
-        <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-          <div>
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700">
-              Username
-            </label>
-            <input
-              id="username"
+        <form
+          action="/api/auth/login"
+          method="POST"
+          onSubmit={handleSubmit}
+          className="mt-6 space-y-4"
+        >
+          <FormControl id="username" required>
+            <FormControl.Label>Username</FormControl.Label>
+            <TextInput
+              name="username"
               type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
               autoComplete="username"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               disabled={loading}
+              block
             />
-          </div>
+          </FormControl>
 
-          <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700">
-              Password
-            </label>
-            <input
-              id="password"
+          <FormControl id="password" required>
+            <FormControl.Label>Password</FormControl.Label>
+            <TextInput
+              name="password"
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
               autoComplete="current-password"
-              className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-gray-900 shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
               disabled={loading}
+              block
             />
-          </div>
+          </FormControl>
 
           {error && (
             <p className="text-sm text-red-600" role="alert">
@@ -110,13 +87,9 @@ export default function LoginPage() {
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded-md bg-blue-600 px-4 py-2 font-medium text-white hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50"
-          >
+          <Button type="submit" variant="primary" disabled={loading} block>
             {loading ? "Signing in…" : "Sign in"}
-          </button>
+          </Button>
         </form>
       </div>
     </main>
