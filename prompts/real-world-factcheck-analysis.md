@@ -2,7 +2,7 @@
 
 **Run date**: 2026-03-02  
 **Script**: `npm run run-real-world-factchecks`  
-**Examples**: 15 from `real-world-factchecks`
+**Examples**: 15 (reference source `test-fixtures/real-world-factchecks`)
 
 ---
 

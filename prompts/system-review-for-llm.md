@@ -45,7 +45,7 @@ This section documents improvements implemented from the docket-improvement-plan
 ### 9.4 Retrieval & Monitoring
 
 - **Dynamic top-k** (`lib/retrieve.ts`): 6 chunks for `case_facts` + drug war terms (vs default 4). `POST_RERANK_TOP_K_EXTENDED = 6`.
-- **Retrieval drift monitoring**: Migration `007_retrieval_drift_monitoring.sql`; script `npm run verify-retrieval-drift`; baseline `retrieval-drift-baseline.json`.
+- **Retrieval drift monitoring**: Migration `007_retrieval_drift_monitoring.sql`; script `npm run verify-retrieval-drift`; baseline `test-fixtures/retrieval-drift-baseline.json`.
 - **Adversarial safeguard tests**: `npm run verify-adversarial-safeguards` — 8 safeguard-specific tests.
 
 ### 9.5 Data & Migrations
@@ -55,7 +55,7 @@ This section documents improvements implemented from the docket-improvement-plan
 
 ### 9.6 Real-World Fact-Check Performance
 
-**Script**: `npm run run-real-world-factchecks` (15 examples from `real-world-factchecks`)
+**Script**: `npm run run-real-world-factchecks` (15 examples; reference source `test-fixtures/real-world-factchecks`)
 
 | Metric | Before | After Judge Fix |
 |--------|--------|-----------------|

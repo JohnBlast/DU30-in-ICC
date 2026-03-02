@@ -3,7 +3,7 @@
  * Runs canonical retrieval tests; compares to baseline. Use for CI/release gating.
  * Usage: npm run verify-retrieval-drift
  *
- * Baseline: retrieval-drift-baseline.json (auto-created on first run if missing).
+ * Baseline: test-fixtures/retrieval-drift-baseline.json (auto-created on first run if missing).
  * Critical queries must maintain >= 0.8 overlap with baseline.
  */
 
@@ -13,7 +13,7 @@ import { intentToRagIndexes } from "../lib/intent";
 import * as fs from "fs";
 import * as path from "path";
 
-const BASELINE_PATH = path.join(process.cwd(), "retrieval-drift-baseline.json");
+const BASELINE_PATH = path.join(process.cwd(), "test-fixtures", "retrieval-drift-baseline.json");
 
 interface BaselineEntry {
   query: string;

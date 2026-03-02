@@ -22,7 +22,10 @@ RAG-powered Q&A app for the Duterte ICC case. Answers are grounded in official I
 | **nl-interpretation.md** | Intent categories, phrase→action mapping |
 | **data-quality.md** | CLEAN rules, validation, pipeline order |
 | **ARCHITECTURE.md** | Tech stack, schema, API contracts |
+| **PROJECT_STRUCTURE.md** | Directory layout, file navigation |
 | **prd-v2.md** | PRD Iteration 2 (optional) |
+| **prompts/** | Cursor implementation prompts; `prompts/archive/` for historical |
+| **test-fixtures/** | Test data (`real-world-factchecks`), generated baselines |
 | **Guides/** | Workflow, testing, and tooling guides |
 
 ## Scripts
@@ -38,6 +41,10 @@ RAG-powered Q&A app for the Duterte ICC case. Answers are grounded in official I
 | `npm run verify-guardrails` | Test out-of-scope / redacted handling |
 | `npm run verify-e2e` | Run E2E verification |
 | `npm run verify-legal-questions` | Test legal question coverage (22 questions) |
+| `npm run verify-retrieval-drift` | Compare retrieval to baseline |
+| `npm run verify-verdict-stability` | Fact-check verdict regression tests |
+| `npm run run-real-world-factchecks` | Run 15 real-world fact-check examples |
+| `npm run ingest-glossary` | Ingest glossary chunks |
 | `npm run check-retrieval -- "<query>"` | Debug RAG retrieval for a query |
 
 ## Observability
