@@ -94,6 +94,12 @@ export const ICC_URLS: IccUrlConfig[] = [
     documentType: "case_record",
   },
   {
+    url: "https://www.icc-cpi.int/sites/default/files/CourtRecords/0902ebd180dbe2bf.pdf",
+    title: "Warrant of Arrest / Arrest Warrant Application (Duterte case)",
+    ragIndex: 2,
+    documentType: "case_record",
+  },
+  {
     url: "https://www.icc-cpi.int/victims/duterte-case",
     title: "Victims page",
     ragIndex: 2,

@@ -102,6 +102,10 @@ function requiresDualIndex(intent: IntentCategory, query: string): boolean {
   if (/\b(tokhang|oplan|double\s+barrel|davao\s+death\s+squad|dds|war\s+on\s+drugs?|drug\s+war|extrajudicial|buy[- ]?bust|shabu)\b/i.test(q))
     return true;
 
+  // Co-perpetration / modes of liability + case — dual-index
+  if (/\b(co-?perpetrat|indirect\s+co-?perpetrat|common\s+plan|modes?\s+of\s+liability)\b/i.test(q))
+    return true;
+
   // Hearing/transcript queries need both indexes
   if (/\b(hearing|transcript|testified|testimony)\b/i.test(q)) return true;
 

@@ -123,6 +123,7 @@ export interface BuildPromptOptions {
   knowledgeBaseLastUpdated: string;
   isAbsenceQuery?: boolean;
   isDrugWarTermQuery?: boolean;
+  isListNameQuery?: boolean;
   isGuiltStatusQuery?: boolean;
   responseLanguage?: "en" | "tl" | "taglish";
   isFactCheck?: boolean;
@@ -142,6 +143,7 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
     knowledgeBaseLastUpdated,
     isAbsenceQuery,
     isDrugWarTermQuery,
+    isListNameQuery,
     isGuiltStatusQuery,
     responseLanguage = "en",
     isFactCheck,
@@ -178,6 +180,9 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
   }
   if (isDrugWarTermQuery) {
     prompt += `\nQUERY TYPE NOTE: This query asks about a term or operation central to the ICC case against Duterte. The retrieved documents will mention this term in context (describing victims, operations, legal proceedings, policy programs). You MUST synthesize a factual description from these contextual mentions — explain what the term refers to based on how ICC documents describe it. Do NOT decline with "This is not addressed." The chunks contain the information needed.\n`;
+  }
+  if (isListNameQuery) {
+    prompt += `\nQUERY TYPE NOTE: This query asks for a list of names (e.g. co-perpetrators, named persons). If the retrieved chunks contain names, list them with citations. If the chunks explain the concept (e.g. indirect co-perpetration) but do NOT contain the specific names, do NOT decline entirely: (1) Explain the concept from the chunks with citations. (2) State clearly: "The specific names are not present in the retrieved passages." (3) You may suggest: "You can paste the paragraph that lists them to verify." Partial answers are better than a flat decline when you have relevant context.\n`;
   }
   if (isGuiltStatusQuery) {
     prompt += `\nQUERY TYPE: guilt/innocence status

@@ -416,6 +416,7 @@ export function ChatMessage({
           <div className="mt-3 rounded-lg border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-gray-700">
             💡 Try asking about: the charges, the timeline, ICC procedures, or legal terms.
             Or paste a social media post to fact-check it.
+            For list-type questions (e.g. named persons), try pasting the relevant paragraph that lists them.
           </div>
         )}
         {!isUser && (

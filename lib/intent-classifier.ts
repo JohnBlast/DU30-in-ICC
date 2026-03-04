@@ -95,6 +95,12 @@ function layer2Regex(cleanedQuery: string): { intent: IntentCategory; confidence
   if (/(surrender|arrested|arrest)\s*(duterte|du30|him|accused)|(duterte|du30)\s*(surrender|arrested|arrest)/i.test(q)) return { intent: "case_facts", confidence: "high" };
   if (/\bevidence[s]?\b.*duterte|duterte.*\bevidence[s]?\b/i.test(q)) return { intent: "case_facts", confidence: "high" };
   if (/who\s+are\s+the\s+judges|judges\s+in\s+the\s+case|fit\s+to\s+stand\s+trial/i.test(q)) return { intent: "case_facts", confidence: "high" };
+  // "Who are the X" in ICC/case context (co-perpetrators, named, accused, etc.)
+  if (/\b(who)\s+(is|are|was|were)\s+(the\s+)?(named|listed|accused|alleged|indirect|co-?perpetrat\w*|accomplice|member|participant|suspect|witness|victim)/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  // "Who is [PERSON NAME]" (not Duterte) — case_facts if not redaction probe
+  if (/\bwho\s+(is|was)\s+[A-Z][a-z]+(\s+[A-Z'][a-z]+){0,3}/i.test(q) && !/\bredacted\b/i.test(q))
+    return { intent: "case_facts", confidence: "low" };
   if (/how\s+many\s+.*(killed|victims|counts?|people|died)/i.test(q)) return { intent: "case_facts", confidence: "high" };
   if (/measures\s*.*(facilitate|attendance|duterte)|facilitate\s*.*(attendance|duterte)/i.test(q)) return { intent: "case_facts", confidence: "high" };
   if (/(who\s+pays?|who\s+funds?|pays?\s+for)\s*(defence|defense|legal\s+aid|duterte)/i.test(q)) return { intent: "case_facts", confidence: "high" };

@@ -8,7 +8,8 @@
  *   npx tsx --env-file=.env.local scripts/ingest.ts --fix-zero-chunks       # List docs with 0 chunks (dry run)
  *   npx tsx --env-file=.env.local scripts/ingest.ts --fix-zero-chunks --ingest  # Re-ingest all 0-chunk docs
  *   npx tsx --env-file=.env.local scripts/ingest.ts --discover       # Job 2: discover new filings (dry run)
- *   npx tsx --env-file=.env.local scripts/ingest.ts --discover --ingest  # discover + ingest
+ *   npx tsx --env-file=.env.local scripts/ingest.ts --discover --ingest  # discover + ingest all case filings
+ *   npm run ingest:case-filings  # shorthand for discover + ingest
  *   npx tsx --env-file=.env.local scripts/ingest.ts --discover-transcripts       # Find Duterte transcripts (dry run)
  *   npx tsx --env-file=.env.local scripts/ingest.ts --discover-transcripts --ingest  # discover + ingest transcripts
  */

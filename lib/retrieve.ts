@@ -209,6 +209,9 @@ function expandQueryForEmbedding(query: string): string {
   if (/\b(davao\s+death\s+squad|dds)\b/i.test(query) && !/\b(kill|extrajudicial|murder)\b/i.test(query)) {
     return query + " Davao Death Squad extrajudicial killings Philippines";
   }
+  if (/\b(co-?perpetrat|indirect\s+co-?perpetrat|common\s+plan|modes?\s+of\s+liability)\b/i.test(query)) {
+    return query + " co-perpetrators named persons accused alleged DCC warrant Article 25";
+  }
   return query;
 }
 
@@ -227,6 +230,13 @@ const FTS_SYNONYMS: Record<string, string> = {
   judge: "judges chamber magistrate",
   victims: "killed affected persons",
   rights: "entitlements guarantees protections",
+  "co-perpetration": "co-perpetrators common plan agreement indirect perpetration accomplice",
+  coperpetration: "co-perpetrators common plan agreement indirect perpetration",
+  perpetrator: "perpetrators co-perpetrators accomplice participant member",
+  accomplice: "co-perpetrator accomplice participant common plan",
+  "indirect co-perpetration": "co-perpetrators common plan modes of liability Article 25",
+  "common plan": "co-perpetration agreement common purpose joint criminal",
+  "modes of liability": "co-perpetration perpetrator accomplice Article 25 aiding abetting",
 };
 
 /** Expand query with ICC terminology synonyms for better FTS match. */
@@ -258,7 +268,54 @@ function expandQueryForFts(query: string): string {
   if (/\bextrajudicial\b/i.test(expanded)) {
     expanded += " killing execution drug war Tokhang";
   }
+  if (/\b(co-?perpetrat\w*|common\s+plan|modes?\s+of\s+liability)\b/i.test(expanded)) {
+    expanded +=
+      " co-perpetrators co-perpetration common plan agreement Article 25 modes liability perpetrator accomplice indirect";
+  }
   return expanded.trim();
+}
+
+const LIST_QUERY_PATTERNS = [
+  /\b(list|name|who\s+are|enumerate|identify)\b.*\b(perpetrat|co-?perpetrat|accomplice|member|participant|suspect|accused|named|person|individual|involved)\b/i,
+  /\b(perpetrat|co-?perpetrat|accomplice|member|participant)\b.*\b(list|name|who|identify)\b/i,
+  /\blist\s+the\s+names?\b/i,
+  /\bwho\s+(is|are)\b.*\b(named|listed|mentioned|identified|involved|accused|charged)\b/i,
+];
+
+function isListQuery(query: string): boolean {
+  return LIST_QUERY_PATTERNS.some((p) => p.test(query));
+}
+
+async function fetchAdjacentChunks(
+  supabase: ReturnType<typeof getSupabase>,
+  topChunks: RetrievalChunk[],
+  maxNeighbors: number = 2
+): Promise<RetrievalChunk[]> {
+  if (topChunks.length === 0) return [];
+  const seen = new Set(topChunks.map((c) => c.chunk_id));
+  const neighbors: RetrievalChunk[] = [];
+
+  for (const chunk of topChunks.slice(0, 2)) {
+    const { data } = await supabase.rpc("get_adjacent_chunks", {
+      target_chunk_id: chunk.chunk_id,
+      neighbor_count: maxNeighbors,
+    });
+    if (data && Array.isArray(data)) {
+      for (const row of data) {
+        if (!seen.has(row.chunk_id)) {
+          seen.add(row.chunk_id);
+          neighbors.push({
+            chunk_id: row.chunk_id,
+            document_id: row.document_id,
+            content: row.content ?? "",
+            metadata: (row.metadata as Record<string, unknown>) ?? {},
+            similarity: chunk.similarity ? chunk.similarity * 0.9 : undefined,
+          });
+        }
+      }
+    }
+  }
+  return neighbors;
 }
 
 /** Resolve ragIndexes to single filter for RPC: undefined = search all (both indexes). */
@@ -369,7 +426,18 @@ export async function retrieve(options: RetrieveOptions): Promise<RetrieveResult
 
   const topK = useExtendedTopK ? POST_RERANK_TOP_K_EXTENDED : POST_RERANK_TOP_K_DEFAULT;
   const diverseChunks = enforceDocDiversity(merged, 2, topK);
-  const topChunks = diverseChunks.slice(0, topK);
+  let topChunks = diverseChunks.slice(0, topK);
+
+  if (isListQuery(query) && topChunks.length > 0) {
+    const neighbors = await fetchAdjacentChunks(supabase, topChunks, 2);
+    if (neighbors.length > 0) {
+      logEvent("rag.neighbor_fetch", "info", {
+        top_chunks: topChunks.length,
+        neighbors_added: neighbors.length,
+      });
+      topChunks = [...topChunks, ...neighbors].slice(0, POST_RERANK_TOP_K_EXTENDED);
+    }
+  }
 
   const bothMethods = vecChunks.length > 0 && ftsChunks.length > 0;
   let retrievalConfidence: "high" | "medium" | "low";

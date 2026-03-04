@@ -28,6 +28,7 @@ import { isNormativeQuery, NORMATIVE_REFUSAL_MESSAGE } from "./normative-filter"
 import { runDeterministicJudge } from "./deterministic-judge";
 import { checkTranslationStability } from "./translation-stability";
 import { neutralizeQuery } from "./query-neutralizer";
+import { rewriteFollowUp } from "./follow-up-rewriter";
 
 const MAX_ANSWER_TOKENS = 1024;
 const MAX_JUDGE_TOKENS = 256;
@@ -384,6 +385,16 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     };
   }
 
+  // Follow-up rewriter: resolve "list them" / "what about X" using conversation history (P0-1)
+  const followUp = rewriteFollowUp(effectiveQuery, conversationHistory);
+  if (followUp.rewritten) {
+    logEvent("followup.rewrite", "info", {
+      original: followUp.originalQuery.slice(0, 80),
+      rewritten: followUp.query.slice(0, 120),
+    });
+    effectiveQuery = followUp.query;
+  }
+
   effectiveQuery = neutralizeQuery(effectiveQuery);
 
   if (isNormativeQuery(effectiveQuery)) {
@@ -635,13 +646,16 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   const isDrugWarTermQuery =
     /\bwhat\s+(is|are|was|were)\b.*\b(tokhang|oplan|double\s+barrel|dds|davao\s+death|drug\s+war|war\s+on\s+drugs?|nanlaban|shabu|buy[- ]?bust|extrajudicial)\b/i.test(effectiveQuery) ||
     /\b(tokhang|oplan|double\s+barrel|dds|davao\s+death)\b.*\bwhat\b/i.test(effectiveQuery);
+  const isListNameQuery =
+    /\b(who\s+(is|are)|list|name|enumerate|identify)\b.*\b(perpetrat|co-?perpetrat|accomplice|member|participant|named|involved|accused|charged|suspect)\b/i.test(effectiveQuery) ||
+    /\b(perpetrat|co-?perpetrat|accomplice|member|participant)\b.*\b(who|list|name|identify)\b/i.test(effectiveQuery);
   const retrieveResult = await retrieve({
     query: effectiveQuery,
     pastedText: effectivePastedText,
     ragIndexes,
     intent,
     documentType: isHearingContentQuery ? "transcript" : undefined,
-    useExtendedTopK: intent === "case_facts" && isDrugWarTermQuery,
+    useExtendedTopK: intent === "case_facts" && (isDrugWarTermQuery || isListNameQuery),
   });
   const { chunks, pasteTextMatched, retrievalConfidence } = retrieveResult;
 
@@ -693,6 +707,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     knowledgeBaseLastUpdated: kbDate,
     isAbsenceQuery,
     isDrugWarTermQuery,
+    isListNameQuery,
     isGuiltStatusQuery,
     responseLanguage,
     originalQuery,

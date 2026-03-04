@@ -239,6 +239,7 @@ export function verifyEnumeratedClaims(
       .filter((i) => i >= 1 && i <= chunks.length)
       .map((i) => chunks[i - 1].content);
     const combinedChunk = citedChunks.join(" ");
+    const allChunksContent = chunks.map((c) => c.content).join(" ");
 
     const items = extractListItems(matchedListText);
     if (items.length < 2) continue;
@@ -247,7 +248,11 @@ export function verifyEnumeratedClaims(
 
     const grounded: string[] = [];
     for (const item of items) {
-      const { grounded: ok } = isClaimGrounded(item, combinedChunk);
+      let ok = isClaimGrounded(item, combinedChunk).grounded;
+      if (!ok) {
+        const fallback = isClaimGrounded(item, allChunksContent).grounded;
+        if (fallback) ok = true;
+      }
       if (ok) {
         grounded.push(item);
         groundedClaims++;

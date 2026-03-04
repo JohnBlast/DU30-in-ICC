@@ -17,6 +17,7 @@ interface PromptChipsProps {
 
 const CHIPS: Array<{ text: string; isFactCheck?: boolean }> = [
   { text: "What is Duterte charged with?" },
+  { text: "Who are the indirect co-perpetrators?" },
   { text: "When was the arrest warrant issued?" },
   { text: "What happens next in the case?" },
   { text: "What is crimes against humanity?" },

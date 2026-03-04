@@ -27,10 +27,12 @@
     "ingest": "tsx --env-file=.env.local scripts/ingest.ts",
     "ingest:all": "tsx --env-file=.env.local scripts/ingest.ts --all",
     "ingest:discover": "tsx --env-file=.env.local scripts/ingest.ts --discover",
+    "ingest:case-filings": "tsx --env-file=.env.local scripts/ingest.ts --discover --ingest",
     "run-real-world-factchecks": "tsx --env-file=.env.local scripts/run-real-world-factchecks.ts",
     "ingest-glossary": "tsx --env-file=.env.local scripts/ingest-glossary.ts",
     "verify-verdict-stability": "tsx --env-file=.env.local scripts/verify-verdict-stability.ts",
     "verify-false-decline": "tsx --env-file=.env.local scripts/verify-false-decline.ts",
+    "verify-indirect-coperpetration": "tsx --env-file=.env.local scripts/verify-indirect-coperpetration.ts",
     "tune-thresholds": "tsx --env-file=.env.local scripts/tune-thresholds.ts",
     "verify-contamination-guard": "tsx scripts/verify-contamination-guard.ts"
   },
