@@ -15,12 +15,20 @@ async function main() {
   const ragIndexes = intentToRagIndexes(intent, query);
   console.log(`Intent: ${intent} → RAG ${ragIndexes.length ? ragIndexes : "none"}`);
 
-  const result = await retrieve({ query, ragIndexes: ragIndexes.length ? ragIndexes : [2] });
+  const isListNameQuery =
+    /\b(who\s+(is|are)|list|name|enumerate|identify)\b.*\b(perpetrat|co-?perpetrat|accomplice|member|participant|named|involved|accused|charged|suspect)\b/i.test(query) ||
+    /\b(perpetrat|co-?perpetrat|accomplice|member|participant)\b.*\b(who|list|name|identify)\b/i.test(query);
+  const result = await retrieve({
+    query,
+    ragIndexes: ragIndexes.length ? ragIndexes : [2],
+    intent,
+    useExtendedTopK: intent === "case_facts" && isListNameQuery,
+  });
   console.log(`Chunks: ${result.chunks.length}\n`);
 
   result.chunks.forEach((c, i) => {
     console.log(`--- Chunk ${i + 1} (${c.metadata?.document_title ?? "?"}) ---`);
-    console.log(c.content.slice(0, 400) + (c.content.length > 400 ? "…" : ""));
+    console.log(c.content.slice(0, 800) + (c.content.length > 800 ? "…" : ""));
     console.log("");
   });
 }

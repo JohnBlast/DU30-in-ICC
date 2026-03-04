@@ -274,7 +274,7 @@
 
 > **Purpose:** When another model continues this codebase, this section provides context to resume quickly without re-reading the full spec.
 
-### Current State (as of 2026-02-28)
+### Current State (as of 2026-03-04)
 
 | Feature | Location | Notes |
 |--------|----------|-------|
@@ -284,16 +284,19 @@
 | **Chat UX** | `app/page.tsx` | Optimistic: user message appears immediately on send. "Generating…" with pulse while waiting. Auto-scroll to bottom. `skipNextLoadRef` prevents overwriting messages when new conversation created. |
 | **Legal disclaimer** | `app/layout.tsx` | Footer in flow layout (not fixed); does not block chat input. |
 | **LangSmith** | `lib/openai-client.ts` | Wraps OpenAI with `wrapOpenAI` when `LANGSMITH_TRACING=true` or `LANGCHAIN_TRACING_V2=true`. Uses `LANGSMITH_API_KEY` or `LANGCHAIN_API_KEY`. Traces show in Runs; Threads/Evaluator empty (normal). |
-| **Database** | `supabase/schema.sql`, `migrations/002_*` | `conversations.is_bookmarked` (boolean). Run migration if not applied. |
-| **Intent fallbacks** | `lib/intent-classifier.ts` | Surrender/arrest queries (e.g. "Did Duterte surrender or was he arrested?") → `case_facts`. See nl-interpretation.md §2.1. |
-| **Verification scripts** | `scripts/verify-*.ts` | `verify-guardrails`, `verify-e2e`, `verify-legal-questions`, `verify-adversarial-safeguards`, `verify-false-decline`, `verify-contamination-guard`. Run before deployment. |
+| **Database** | `supabase/schema.sql`, `migrations/002_*`–`009_*` | `conversations.is_bookmarked` (002). **Migration 009** adds `get_adjacent_chunks` RPC for list queries. Run migrations manually in Supabase SQL Editor if upgrading. |
+| **Indirect co-perpetration** | `lib/retrieve.ts`, `lib/intent-classifier.ts`, `lib/prompts.ts`, `lib/chat.ts`, `lib/claim-verifier.ts`, `lib/follow-up-rewriter.ts` | Warrant of Arrest (0902ebd180dbe2bf.pdf) in icc-urls. Follow-up rewriter rewrites "list them"/"what about X" using conversation history. List queries use adjacent-chunk fetch, supplemental FTS. **Named-individual queries** ("Can you tell me about Bong GO?", "Who is Vicente DANAO?") — Layer 2 intent rule + supplemental FTS/vector for DELA ROSA, CASCOLAN, ALBAYALDE, Bong GO, DANAO, AGUIRRE, LAPEÑA. Prompt note for `isNamedIndividualQuery` synthesizes ICC facts. |
+| **Ingestion** | `scripts/ingest.ts` | `ingest` (single URL), `ingest:all` (curated URLs), `ingest:discover` (dry run), `ingest:case-filings` (discover + ingest all case filings). Each court-record scrape costs ~1 Firecrawl credit; check before scrape to avoid waste on already-ingested PDFs. |
+| **Intent fallbacks** | `lib/intent-classifier.ts` | Surrender/arrest queries → `case_facts`. "Who are the X" / co-perpetrator patterns → list intent. Co-perpetrator name + "tell me about"/"about"/"role" → `case_facts`. See nl-interpretation.md §2.1. |
+| **Verification scripts** | `scripts/verify-*.ts` | `verify-guardrails`, `verify-e2e`, `verify-legal-questions`, `verify-adversarial-safeguards`, `verify-false-decline`, `verify-contamination-guard`, **`verify-indirect-coperpetration`**. Diagnostic: `check-retrieval -- "<query>"`, `check-names-in-kb`. Run before deployment. |
 | **FD test fixes** | `prompts/cursor-fd-test-fixes.md` | Retrieval confidence logic (1-chunk both-methods→medium); contamination guard comma-formatted numbers ("30,000"). See system-review-for-llm.md §9.14. |
 
 ### Key Files
 
 | Purpose | Files |
 |---------|-------|
-| **Chat flow** | `app/page.tsx`, `app/api/chat/route.ts`, `lib/chat.ts` |
+| **Chat flow** | `app/page.tsx`, `app/api/chat/route.ts`, `lib/chat.ts`, `lib/follow-up-rewriter.ts` |
+| **RAG / retrieval** | `lib/retrieve.ts` (vector + FTS, adjacent chunks, list-query expansion), `lib/claim-verifier.ts` |
 | **Conversations** | `app/api/conversations/route.ts`, `app/api/conversations/[id]/route.ts`, `ConversationSidebar.tsx` |
 | **OpenAI + tracing** | `lib/openai-client.ts` (used by chat, intent-classifier, retrieve) |
 | **Spec hierarchy** | `.cursorrules` → constitution.md → prd.md → nl-interpretation.md, data-quality.md, prompt-spec.md → TASKS.md |
@@ -305,7 +308,7 @@
 3. Sidebar: delete and bookmark icons visible; long titles truncate with tooltip; on desktop, sidebar stays open when switching conversations
 4. Hover message — copy icon appears
 5. Footer disclaimer visible; chat input not blocked
-6. `npm run verify-guardrails` and `npm run verify-e2e` — both pass; optional: `npm run verify-legal-questions`, `npm run verify-adversarial-safeguards`, `npm run verify-false-decline`, `npm run verify-contamination-guard`
+6. `npm run verify-guardrails` and `npm run verify-e2e` — both pass; optional: `npm run verify-legal-questions`, `npm run verify-adversarial-safeguards`, `npm run verify-false-decline`, `npm run verify-contamination-guard`, `npm run verify-indirect-coperpetration`
 
 ---
 

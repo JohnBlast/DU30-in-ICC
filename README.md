@@ -6,7 +6,7 @@ RAG-powered Q&A app for the Duterte ICC case. Answers are grounded in official I
 
 1. **Setup** — Follow TASKS.md §0 for external services (OpenAI, Supabase, Firecrawl).
 2. **Configure** — Copy `.env.local` template from TASKS.md §0 Step 5.
-3. **Database** — Run schema: `npm run db:migrate` or apply `supabase/schema.sql` in Supabase SQL Editor.
+3. **Database** — Run schema: `npm run db:migrate` or apply `supabase/schema.sql` in Supabase SQL Editor. For upgrades, apply migrations 002–009 (see supabase/README.md).
 4. **Seed** — Create admin: `npm run db:seed-admin -- admin your-password`
 5. **Run** — `npm run dev`
 
@@ -36,7 +36,10 @@ RAG-powered Q&A app for the Duterte ICC case. Answers are grounded in official I
 | `npm run db:migrate` | Apply schema (requires SUPABASE_DB_URL) |
 | `npm run db:seed-admin -- <user> <pass>` | Create admin user |
 | `npm run add-user -- <user> <pass>` | Create user |
-| `npm run ingest` | Scrape and ingest ICC documents |
+| `npm run ingest` | Ingest single URL (or first curated URL) |
+| `npm run ingest:all` | Ingest all curated ICC URLs |
+| `npm run ingest:discover` | Discover new case filings (dry run) |
+| `npm run ingest:case-filings` | Discover and ingest all case filings |
 | `npm run cleanup-expired` | Delete expired conversations |
 | `npm run verify-guardrails` | Test out-of-scope / redacted handling |
 | `npm run verify-e2e` | Run E2E verification |
@@ -46,10 +49,12 @@ RAG-powered Q&A app for the Duterte ICC case. Answers are grounded in official I
 | `npm run verify-adversarial-safeguards` | Adversarial + safeguard tests (S-1–S-8, SR-07–09) |
 | `npm run verify-false-decline` | False-decline reduction tests (FD-01–FD-15) |
 | `npm run verify-contamination-guard` | Contamination guard unit tests |
+| `npm run verify-indirect-coperpetration` | Indirect co-perpetration list-query regression tests |
 | `npm run run-real-world-factchecks` | Run 15 real-world fact-check examples |
 | `npm run ingest-glossary` | Ingest glossary chunks |
 | `npm run tune-thresholds` | Run labeled queries for retrieval threshold tuning |
 | `npm run check-retrieval -- "<query>"` | Debug RAG retrieval for a query |
+| `npm run check-names-in-kb` | Verify co-perpetrator names exist in knowledge base |
 
 ## Observability
 

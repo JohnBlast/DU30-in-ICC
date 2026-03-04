@@ -238,6 +238,7 @@ Remaining blocks: Ex 10 (Tagalog opinion/fallback), Ex 11 (prosecutor waiver doc
 ## 2. Data Layer: Ingestion & Knowledge Base
 
 ### Ingestion Pipeline (`scripts/ingest.ts`)
+- **Commands:** `ingest` (single URL), `ingest:all` (curated URLs), `ingest:discover` (dry run), `ingest:case-filings` (discover + ingest all case filings)
 1. PDF URLs are provided (ICC court record pages)
 2. **Firecrawl** extracts text from PDFs
 3. Document metadata extracted: title, date_published, document_type, url, rag_index
@@ -268,6 +269,7 @@ document_chunks:
 ### RPC Functions (PostgreSQL)
 - `match_document_chunks(query_embedding, match_rag_index, match_threshold, match_count, match_document_type)` — pgvector cosine similarity search
 - `search_document_chunks_fts(search_query, match_rag_index, match_count, match_document_type)` — PostgreSQL full-text search (BM25-style)
+- `get_adjacent_chunks(chunk_ids, same_document)` — fetch neighboring chunks for list queries (migration 009)
 
 ### Document Types in KB
 | Type | Description | Evidence Hierarchy |
@@ -991,10 +993,13 @@ The implementation prompt (`prompts/cursor-production-hardening-prompt.md`) cont
 | `lib/language-detect.ts` | Tagalog/English/Tanglish detection |
 | `lib/paste-detect.ts` | ICC document vs social media classification |
 | `lib/translate.ts` | Filipino → English translation |
+| `lib/follow-up-rewriter.ts` | Rewrites follow-ups ("list them", "what about X") using conversation history |
+| `lib/claim-verifier.ts` | Citation verification; fallback when cited chunks lack list items |
 | `lib/openai-client.ts` | OpenAI client singleton |
 | `lib/logger.ts` | Structured event logging |
-| `scripts/ingest.ts` | PDF ingestion pipeline |
+| `scripts/ingest.ts` | PDF ingestion pipeline (ingest, ingest:all, ingest:discover, ingest:case-filings) |
 | `scripts/ingest-glossary.ts` | Synthetic glossary chunk injection (14 domain terms) |
+| `scripts/verify-indirect-coperpetration.ts` | Indirect co-perpetration list-query regression tests |
 | `scripts/check-retrieval.ts` | Diagnostic: test retrieval for a query |
 | `scripts/list-ingested.ts` | Diagnostic: list all ingested documents |
 | `scripts/run-real-world-factchecks.ts` | Run 15 real-world fact-check examples |

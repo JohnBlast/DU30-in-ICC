@@ -647,8 +647,11 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     /\bwhat\s+(is|are|was|were)\b.*\b(tokhang|oplan|double\s+barrel|dds|davao\s+death|drug\s+war|war\s+on\s+drugs?|nanlaban|shabu|buy[- ]?bust|extrajudicial)\b/i.test(effectiveQuery) ||
     /\b(tokhang|oplan|double\s+barrel|dds|davao\s+death)\b.*\bwhat\b/i.test(effectiveQuery);
   const isListNameQuery =
-    /\b(who\s+(is|are)|list|name|enumerate|identify)\b.*\b(perpetrat|co-?perpetrat|accomplice|member|participant|named|involved|accused|charged|suspect)\b/i.test(effectiveQuery) ||
-    /\b(perpetrat|co-?perpetrat|accomplice|member|participant)\b.*\b(who|list|name|identify)\b/i.test(effectiveQuery);
+    /\b(who\s+(is|are)|list|name|enumerate|identify)\b.*\b(perpetrat\w*|co-?perpetrat\w*|accomplice|member|participant|named|involved|accused|charged|suspect)\b/i.test(effectiveQuery) ||
+    /\b(perpetrat\w*|co-?perpetrat\w*|accomplice|member|participant)\b.*\b(who|list|name|identify)\b/i.test(effectiveQuery);
+  const isNamedIndividualQuery =
+    /\b(dela\s+rosa|delarosa|cascolan|albayalde|bong\s*'?\s*go|danao|aguirre|lap[eé]ña|lapena)\b/i.test(effectiveQuery) &&
+    /\b(role|position|what\s+did|involvement|who\s+is|tell\s+me\s+about|about|what\s+do\s+you\s+know|information\s+about)\b/i.test(effectiveQuery);
   const retrieveResult = await retrieve({
     query: effectiveQuery,
     pastedText: effectivePastedText,
@@ -708,6 +711,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     isAbsenceQuery,
     isDrugWarTermQuery,
     isListNameQuery,
+    isNamedIndividualQuery,
     isGuiltStatusQuery,
     responseLanguage,
     originalQuery,

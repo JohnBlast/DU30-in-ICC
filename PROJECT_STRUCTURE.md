@@ -43,8 +43,10 @@
 ### `lib/`
 
 - `chat.ts` — Chat pipeline (intent → RAG → LLM → Judge)
-- `retrieve.ts` — Vector + FTS retrieval
+- `follow-up-rewriter.ts` — Rewrites follow-ups ("list them", "what about X") using conversation history
+- `retrieve.ts` — Vector + FTS retrieval, adjacent chunks, list-query expansion, supplemental FTS/vector for named-individual queries
 - `fact-check.ts` — Claim extraction, verification
+- `claim-verifier.ts` — Citation verification, fallback when cited chunks lack list items
 - `intent-classifier.ts`, `intent.ts` — NL interpretation
 - `prompts.ts` — System prompt builder, Judge prompt
 - `attribution-verifier.ts`, `deterministic-judge.ts` — Production safeguards
@@ -58,9 +60,9 @@
 
 ### `scripts/`
 
-- `ingest.ts` — ICC document ingestion
+- `ingest.ts` — ICC document ingestion (`ingest`, `ingest:all`, `ingest:discover`, `ingest:case-filings`)
 - `ingest-glossary.ts` — Glossary chunk ingestion
-- `verify-*.ts` — Verification scripts (guardrails, retrieval drift, verdict stability)
+- `verify-*.ts` — Verification scripts (guardrails, retrieval drift, verdict stability, indirect co-perpetration)
 - `run-real-world-factchecks.ts` — Fact-check regression tests
 
 ### `test-fixtures/`
@@ -71,4 +73,4 @@
 ### `supabase/`
 
 - `schema.sql` — Base schema
-- `migrations/` — Incremental migrations (002–008)
+- `migrations/` — Incremental migrations (002–009; 009 adds `get_adjacent_chunks` RPC)

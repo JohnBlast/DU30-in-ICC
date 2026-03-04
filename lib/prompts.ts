@@ -124,6 +124,7 @@ export interface BuildPromptOptions {
   isAbsenceQuery?: boolean;
   isDrugWarTermQuery?: boolean;
   isListNameQuery?: boolean;
+  isNamedIndividualQuery?: boolean;
   isGuiltStatusQuery?: boolean;
   responseLanguage?: "en" | "tl" | "taglish";
   isFactCheck?: boolean;
@@ -144,6 +145,7 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
     isAbsenceQuery,
     isDrugWarTermQuery,
     isListNameQuery,
+    isNamedIndividualQuery,
     isGuiltStatusQuery,
     responseLanguage = "en",
     isFactCheck,
@@ -181,8 +183,18 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
   if (isDrugWarTermQuery) {
     prompt += `\nQUERY TYPE NOTE: This query asks about a term or operation central to the ICC case against Duterte. The retrieved documents will mention this term in context (describing victims, operations, legal proceedings, policy programs). You MUST synthesize a factual description from these contextual mentions — explain what the term refers to based on how ICC documents describe it. Do NOT decline with "This is not addressed." The chunks contain the information needed.\n`;
   }
+  if (isNamedIndividualQuery && !isListNameQuery) {
+    prompt += `\nQUERY TYPE NOTE: The user is asking about a named individual (e.g., co-perpetrator or official) in the ICC case. Synthesize ICC-related facts from the retrieved passages—roles, positions, alleged involvement, and what the documents state about their connection to the case. Cite sources [N]. Do NOT decline if chunks mention the person.\n`;
+  }
   if (isListNameQuery) {
-    prompt += `\nQUERY TYPE NOTE: This query asks for a list of names (e.g. co-perpetrators, named persons). If the retrieved chunks contain names, list them with citations. If the chunks explain the concept (e.g. indirect co-perpetration) but do NOT contain the specific names, do NOT decline entirely: (1) Explain the concept from the chunks with citations. (2) State clearly: "The specific names are not present in the retrieved passages." (3) You may suggest: "You can paste the paragraph that lists them to verify." Partial answers are better than a flat decline when you have relevant context.\n`;
+    prompt += `\nQUERY TYPE NOTE: This query asks for a list of names (e.g. co-perpetrators, named persons). 
+- EXHAUSTIVELY scan EVERY retrieved passage. Individuals may appear in different chunks and documents (Warrant, DCC, Prosecution application, transcripts). Include every person identified as a Co-Perpetrator.
+- For EACH person, provide the SAME level of detail: when the chunks give roles/positions (Mayoral period, Presidential period, PNP Chief, PDEA, Justice Secretary, etc.), include them with [N] citations. Do not leave anyone as just a name with [N]—extract and state their roles from the passages.
+- Look for: lettered items (a., b., c., d., e., f., g.), numbered paragraphs, "Co-Perpetrators" headers, PDEA/PNP/Justice officials. Check transcript chunks for names like LAPEÑA (PDEA), AGUIRRE (Justice Secretary).
+- Chunk-boundary handling: The Warrant's lettered list (a.–e.) must ALL appear. If you see "Chief. [fn] ALBAYALDE vowed to continue and intensify the anti-illegal drugs campaign", the preceding "Chief" is the end of ALBAYALDE's entry—include Oscar ALBAYALDE as Chief of the PNP (Presidential period, April 2018–October 2019) [N]. If you see "e. Christopher Lawrence 'Bong' GO ("Bong GO"): Mayoral period: DUTERTE's Personal Aide and Special Assistant (1998-2016); Presidential period: DUTERTE's Special Assistant and Chief of the Presidential Managerial Staff (June 2016-October 2018)", copy those roles verbatim—do not paraphrase or replace with vague descriptions.
+- The Warrant lettered list includes d. Oscar ALBAYALDE and e. Christopher Lawrence 'Bong' GO—you MUST include both with their roles. Do not omit them.
+- Do NOT omit anyone. Verify every chunk before finalizing.
+- If the chunks only explain the concept without names, explain the concept and state that specific names are not present.\n`;
   }
   if (isGuiltStatusQuery) {
     prompt += `\nQUERY TYPE: guilt/innocence status

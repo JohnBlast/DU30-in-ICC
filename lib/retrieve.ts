@@ -210,7 +210,12 @@ function expandQueryForEmbedding(query: string): string {
     return query + " Davao Death Squad extrajudicial killings Philippines";
   }
   if (/\b(co-?perpetrat|indirect\s+co-?perpetrat|common\s+plan|modes?\s+of\s+liability)\b/i.test(query)) {
-    return query + " co-perpetrators named persons accused alleged DCC warrant Article 25";
+    let exp = " co-perpetrators named persons accused alleged DCC warrant Article 25";
+    // List queries need terms that appear in name-list chunks (PNP chiefs, officials)
+    if (isListQuery(query)) {
+      exp += " PNP Philippine National Police chief director general appointed government officials high-ranking Davao";
+    }
+    return query + exp;
   }
   return query;
 }
@@ -271,13 +276,17 @@ function expandQueryForFts(query: string): string {
   if (/\b(co-?perpetrat\w*|common\s+plan|modes?\s+of\s+liability)\b/i.test(expanded)) {
     expanded +=
       " co-perpetrators co-perpetration common plan agreement Article 25 modes liability perpetrator accomplice indirect";
+    // List queries: add terms that appear in name-list chunks (Warrant/DCC list co-perpetrators)
+    if (LIST_QUERY_PATTERNS.some((p) => p.test(expanded))) {
+      expanded += " PNP Philippine National Police chief director general appointed government officials high-ranking Davao";
+    }
   }
   return expanded.trim();
 }
 
 const LIST_QUERY_PATTERNS = [
-  /\b(list|name|who\s+are|enumerate|identify)\b.*\b(perpetrat|co-?perpetrat|accomplice|member|participant|suspect|accused|named|person|individual|involved)\b/i,
-  /\b(perpetrat|co-?perpetrat|accomplice|member|participant)\b.*\b(list|name|who|identify)\b/i,
+  /\b(list|name|who\s+are|enumerate|identify)\b.*\b(perpetrat\w*|co-?perpetrat\w*|accomplice|member|participant|suspect|accused|named|person|individual|involved)\b/i,
+  /\b(perpetrat\w*|co-?perpetrat\w*|accomplice|member|participant)\b.*\b(list|name|who|identify)\b/i,
   /\blist\s+the\s+names?\b/i,
   /\bwho\s+(is|are)\b.*\b(named|listed|mentioned|identified|involved|accused|charged)\b/i,
 ];
@@ -295,7 +304,7 @@ async function fetchAdjacentChunks(
   const seen = new Set(topChunks.map((c) => c.chunk_id));
   const neighbors: RetrievalChunk[] = [];
 
-  for (const chunk of topChunks.slice(0, 2)) {
+  for (const chunk of topChunks.slice(0, 4)) {
     const { data } = await supabase.rpc("get_adjacent_chunks", {
       target_chunk_id: chunk.chunk_id,
       neighbor_count: maxNeighbors,
@@ -358,6 +367,102 @@ export async function retrieve(options: RetrieveOptions): Promise<RetrieveResult
       ]);
 
   let merged = rrfMerge(vecChunks, ftsChunks);
+
+  // Specific-person co-perpetrator query: "What is the role of AGUIRRE?", "Can you tell me about Bong GO?" — boost chunks about that person
+  const coperpetratorNameMatch = query.match(
+    /\b(dela\s+rosa|delarosa|cascolan|albayalde|bong\s*'?\s*go|danao|aguirre|lap[eé]ña|lapena)\b/i
+  );
+  const asksAboutPerson =
+    /\b(role|position|what\s+did|involvement|who\s+is|tell\s+me\s+about|about|what\s+do\s+you\s+know|information\s+about)\b/i;
+  const isSpecificPersonCoperpetrator =
+    coperpetratorNameMatch &&
+    !isListQuery(query) &&
+    asksAboutPerson.test(query);
+  if (isSpecificPersonCoperpetrator) {
+    const name = coperpetratorNameMatch[1].toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/'/g, "");
+    const ftsTerms =
+      name === "aguirre"
+        ? "AGUIRRE Justice Secretary co-perpetrator"
+        : name.includes("lapena")
+          ? "LAPEÑA LAPENA PDEA co-perpetrator"
+          : /bong\s*go/.test(name)
+            ? "Christopher Lawrence Bong GO Personal Aide Special Assistant co-perpetrator"
+            : `${coperpetratorNameMatch[1].replace(/\s+/g, " ").replace(/'/g, "")} co-perpetrator`;
+    const matchIdx = (matchIndex ?? 2) as 1 | 2;
+    const suppFts = await bm25Search(supabase, ftsTerms, matchIdx, 6, documentType);
+    if (suppFts.length > 0) {
+      const seenIds = new Set<string>();
+      const ordered: RetrievalChunk[] = [];
+      for (const c of suppFts) {
+        if (!seenIds.has(c.chunk_id)) {
+          seenIds.add(c.chunk_id);
+          ordered.push(c);
+        }
+      }
+      for (const c of merged) {
+        if (!seenIds.has(c.chunk_id)) {
+          seenIds.add(c.chunk_id);
+          ordered.push(c);
+        }
+      }
+      merged = ordered.length > 0 ? ordered : merged;
+      logEvent("rag.supplemental_person", "info", { name, supp_count: suppFts.length });
+    } else if (merged.length === 0) {
+      // FTS returned nothing; try vector search with name + ICC context
+      const vecQuery =
+        /bong\s*go/.test(name)
+          ? "Christopher Lawrence Bong GO Duterte Personal Aide Special Assistant ICC warrant co-perpetrator"
+          : name === "aguirre"
+            ? "Vitaliano AGUIRRE Justice Secretary Duterte ICC co-perpetrator"
+            : `${coperpetratorNameMatch[1].replace(/'/g, "")} Duterte ICC case co-perpetrator`;
+      const vecEmb = await embedText(vecQuery);
+      const vecSupp = await vectorSearch(
+        supabase,
+        vecEmb,
+        matchIdx,
+        6,
+        Math.min(getThresholds(intent).primary, 0.4),
+        documentType
+      );
+      if (vecSupp.length > 0) {
+        merged = vecSupp;
+        logEvent("rag.supplemental_person_vec", "info", { name, supp_count: vecSupp.length });
+      }
+    }
+  }
+
+  // Co-perpetrator list queries: boost name-list chunks to the front (Warrant enumerates individuals)
+  const isCoPerpetratorList =
+    isListQuery(query) && /\b(co-?perpetrat|indirect|common\s+plan)\b/i.test(query);
+  if (isCoPerpetratorList) {
+    const matchIdx = (matchIndex ?? 2) as 1 | 2;
+    const [mainFts, lapenaFts, aguirreFts] = await Promise.all([
+      bm25Search(supabase, "CASCOLAN DELA ROSA PNP Chief Co-Perpetrators", matchIdx, 6, documentType),
+      bm25Search(supabase, "LAPEÑA LAPENA co-perpetrator", matchIdx, 2, documentType),
+      bm25Search(supabase, "AGUIRRE co-perpetrator", matchIdx, 2, documentType),
+    ]);
+    const suppFtsChunks = [...mainFts, ...lapenaFts, ...aguirreFts];
+    const seenIds = new Set<string>();
+    const ordered: RetrievalChunk[] = [];
+    for (const c of suppFtsChunks) {
+      if (!seenIds.has(c.chunk_id)) {
+        seenIds.add(c.chunk_id);
+        ordered.push(c);
+      }
+    }
+    for (const c of merged) {
+      if (!seenIds.has(c.chunk_id)) {
+        seenIds.add(c.chunk_id);
+        ordered.push(c);
+      }
+    }
+    logEvent("rag.supplemental_list", "info", {
+      supp_fts_count: suppFtsChunks.length,
+      ordered_total: ordered.length,
+      query: "co-perpetrator names FTS",
+    });
+    merged = ordered;
+  }
 
   if (wantsTranscripts && (transcriptVec.length > 0 || transcriptFts.length > 0)) {
     const transcriptMerged = rrfMerge(transcriptVec, transcriptFts);
@@ -424,18 +529,19 @@ export async function retrieve(options: RetrieveOptions): Promise<RetrieveResult
     }
   }
 
-  const topK = useExtendedTopK ? POST_RERANK_TOP_K_EXTENDED : POST_RERANK_TOP_K_DEFAULT;
-  const diverseChunks = enforceDocDiversity(merged, 2, topK);
+  const topK = useExtendedTopK ? (isListQuery(query) ? 12 : Math.max(POST_RERANK_TOP_K_EXTENDED, 8)) : POST_RERANK_TOP_K_DEFAULT;
+  const maxPerDoc = isListQuery(query) ? 5 : 2;
+  const diverseChunks = enforceDocDiversity(merged, maxPerDoc, topK + 4);
   let topChunks = diverseChunks.slice(0, topK);
 
   if (isListQuery(query) && topChunks.length > 0) {
-    const neighbors = await fetchAdjacentChunks(supabase, topChunks, 2);
+    const neighbors = await fetchAdjacentChunks(supabase, topChunks, 4);
     if (neighbors.length > 0) {
       logEvent("rag.neighbor_fetch", "info", {
         top_chunks: topChunks.length,
         neighbors_added: neighbors.length,
       });
-      topChunks = [...topChunks, ...neighbors].slice(0, POST_RERANK_TOP_K_EXTENDED);
+      topChunks = [...topChunks, ...neighbors].slice(0, isListQuery(query) ? 12 : Math.max(POST_RERANK_TOP_K_EXTENDED, 8));
     }
   }
 

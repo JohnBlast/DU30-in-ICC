@@ -21,6 +21,7 @@
     "verify-nl-prompts": "tsx --env-file=.env.local scripts/verify-nl-prompts.ts",
     "verify-legal-questions": "tsx --env-file=.env.local scripts/verify-legal-questions.ts",
     "check-retrieval": "tsx --env-file=.env.local scripts/check-retrieval.ts",
+    "check-names-in-kb": "tsx --env-file=.env.local scripts/check-names-in-kb.ts",
     "list-ingested": "tsx --env-file=.env.local scripts/list-ingested.ts",
     "list-transcripts": "tsx --env-file=.env.local scripts/list-transcripts.ts",
     "test-transcript-retrieval": "tsx --env-file=.env.local scripts/test-transcript-retrieval.ts",

@@ -33,7 +33,7 @@ This bypasses the judge and shows answers directly. Use only for development/deb
 
 ## Apply Schema
 
-For new setups, run `schema.sql` first. If upgrading an existing DB, run `migrations/002_add_conversation_bookmark.sql` for the `is_bookmarked` column.
+For new setups, run `schema.sql` first. If upgrading an existing DB, run migrations in order: 002 (is_bookmarked), 003–008 as needed, **009** (`get_adjacent_chunks` RPC for list queries). Apply each via Supabase SQL Editor or `psql`.
 
 **Option A: npm script** (requires `SUPABASE_DB_URL` in .env.local)
 
