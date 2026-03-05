@@ -274,7 +274,7 @@ export function verifyEnumeratedClaims(
               matchedListText,
               formatList(grounded) + (citationPart ? " " + citationPart : "")
             );
-      cleanedAnswer = cleanedAnswer.replace(sentence, newSentence);
+      cleanedAnswer = cleanedAnswer.replaceAll(sentence, newSentence);
     }
   }
 
