@@ -13,6 +13,11 @@ const COOKIE_NAME = "docket_session";
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  // Cron uses Bearer token — bypass session auth so Vercel Cron can reach the route
+  if (pathname.startsWith("/api/cron/")) {
+    return NextResponse.next();
+  }
+
   // Env-check must bypass auth — check first (match any env-check path)
   if (pathname.includes("/env-check")) {
     return NextResponse.next();
@@ -47,11 +52,19 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (!process.env.AUTH_SECRET || process.env.AUTH_SECRET.length < 32) {
-    return NextResponse.next(); // No secret configured — allow (dev fallback)
+  const authSecret = process.env.AUTH_SECRET;
+  if (!authSecret || authSecret.length < 32) {
+    // In production, fail closed — do not allow requests without valid AUTH_SECRET
+    if (process.env.NODE_ENV === "production") {
+      if (pathname.startsWith("/api/")) {
+        return NextResponse.json({ error: "Server misconfiguration" }, { status: 503 });
+      }
+      return NextResponse.redirect(new URL("/login", req.nextUrl.origin));
+    }
+    return NextResponse.next(); // Dev fallback
   }
   try {
-    const secret = new TextEncoder().encode(process.env.AUTH_SECRET);
+    const secret = new TextEncoder().encode(authSecret);
     await jwtVerify(token, secret);
     return NextResponse.next();
   } catch {

@@ -4,8 +4,16 @@
 
 import { NextResponse } from "next/server";
 import { verifyPassword, createSessionToken, COOKIE_NAME, COOKIE_MAX_AGE } from "@/lib/auth";
+import { checkLoginRateLimit, recordFailedLogin } from "@/lib/rate-limit";
 
 export async function POST(req: Request) {
+  const limit = checkLoginRateLimit(req);
+  if (!limit.ok) {
+    return NextResponse.json(
+      { error: "Too many attempts. Try again later." },
+      { status: 429, headers: { "Retry-After": String(limit.retryAfter) } }
+    );
+  }
   try {
     const body = await req.json();
     const { username, password } = body;
@@ -16,6 +24,7 @@ export async function POST(req: Request) {
 
     const user = await verifyPassword(username.trim(), password);
     if (!user) {
+      recordFailedLogin(req);
       return NextResponse.json({ error: "Invalid username or password" }, { status: 401 });
     }
 

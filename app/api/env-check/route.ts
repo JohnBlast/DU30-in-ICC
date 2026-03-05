@@ -4,8 +4,12 @@ import { getSupabase } from "@/lib/db";
 /**
  * Deployment debug: verify env and DB connectivity.
  * GET /api/env-check — no login required.
+ * Disabled in production to avoid exposing deployment details.
  */
 export async function GET() {
+  if (process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   const hasOpenAI = Boolean(process.env.OPENAI_API_KEY);
   const hasSupabaseUrl = Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL);
   const hasSupabaseKey = Boolean(
