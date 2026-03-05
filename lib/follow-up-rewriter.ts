@@ -61,11 +61,13 @@ export function rewriteFollowUp(
   );
   if (whatAboutMatch) {
     const name = whatAboutMatch[1].trim();
-    return {
-      rewritten: true,
-      query: `What is the role of ${name} in the Duterte ICC case?`,
-      originalQuery: trimmed,
-    };
+    if (name.length > 0) {
+      return {
+        rewritten: true,
+        query: `What is the role of ${name} in the Duterte ICC case?`,
+        originalQuery: trimmed,
+      };
+    }
   }
 
   // "list them" / "name them" / "who are they" → prepend prior topic
