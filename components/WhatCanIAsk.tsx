@@ -27,7 +27,7 @@ export function WhatCanIAsk({ onOpen }: WhatCanIAskProps) {
         type="button"
         onClick={toggle}
         aria-expanded={expanded}
-        className="flex w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100"
+        className="flex min-h-[44px] w-full items-center justify-between px-4 py-3 text-left text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 active:bg-gray-100"
       >
         <span className="flex items-center gap-2">
           <span className="text-base text-gray-500">?</span>

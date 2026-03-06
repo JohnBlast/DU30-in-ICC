@@ -41,7 +41,7 @@ export function PromptChips({
   }
 
   return (
-    <div className="flex flex-wrap justify-center gap-3 p-6">
+    <div className="flex flex-wrap justify-center gap-2 p-4 sm:gap-3 sm:p-6">
       {CHIPS.map((chip) => (
         <Button
           key={chip.text}
@@ -49,7 +49,7 @@ export function PromptChips({
           size="medium"
           onClick={() => handleClick(chip)}
           disabled={disabled}
-          className="rounded-full transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
+          className="min-h-[44px] rounded-full px-4 transition-all duration-150 hover:scale-[1.02] active:scale-[0.98]"
         >
           {chip.text}
         </Button>

@@ -9,7 +9,7 @@
 
 import { useEffect, useState, useCallback, useImperativeHandle, forwardRef } from "react";
 import { Button } from "@primer/react";
-import { TrashIcon, BookmarkIcon, XIcon, ListUnorderedIcon } from "@primer/octicons-react";
+import { TrashIcon, BookmarkIcon, XIcon } from "@primer/octicons-react";
 
 const MOBILE_BREAKPOINT = 768;
 
@@ -26,6 +26,7 @@ interface ConversationSidebarProps {
   onSelect: (id: string) => void;
   onNew: () => void;
   onDelete?: (id: string) => void;
+  onPrefetch?: (id: string) => void;
   /** Controlled open state (optional). If not provided, sidebar manages its own state. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -37,15 +38,20 @@ function ConversationItem({
   onSelect,
   onDelete,
   onBookmark,
+  onPrefetch,
 }: {
   c: Conversation;
   currentId: string | null;
   onSelect: () => void;
   onDelete: () => void;
   onBookmark: () => void;
+  onPrefetch?: () => void;
 }) {
   return (
-    <li className="group flex min-w-0 items-center gap-1">
+    <li
+      className="group flex min-w-0 items-center gap-1"
+      onMouseEnter={onPrefetch}
+    >
       <button
         type="button"
         onClick={(e) => {
@@ -99,7 +105,7 @@ async function fetchConversations(): Promise<{ conversations: Conversation[]; er
 export const ConversationSidebar = forwardRef<
   { refetch: () => Promise<void> },
   ConversationSidebarProps
->(function ConversationSidebar({ currentId, onSelect, onNew, onDelete, open: controlledOpen, onOpenChange }, ref) {
+>(function ConversationSidebar({ currentId, onSelect, onNew, onDelete, onPrefetch, open: controlledOpen, onOpenChange }, ref) {
   const [internalOpen, setInternalOpen] = useState(true);
   const isOpen = controlledOpen ?? internalOpen;
   const setIsOpen = onOpenChange ?? setInternalOpen;
@@ -139,18 +145,6 @@ export const ConversationSidebar = forwardRef<
 
   return (
     <>
-      {/* Toggle button - visible when sidebar is closed (mobile only) */}
-      <button
-        type="button"
-        onClick={() => setIsOpen(true)}
-        className={`fixed left-0 top-20 z-40 rounded-r-md border border-l-0 border-gray-200 bg-gray-50 px-2 py-2 shadow-sm transition-all hover:bg-gray-100 md:hidden ${
-          isOpen ? "-translate-x-full" : "translate-x-0"
-        }`}
-        aria-label="Open conversation list"
-      >
-        <ListUnorderedIcon size={20} />
-      </button>
-
       {/* Backdrop when sidebar open on mobile */}
       <div
         role="button"
@@ -171,14 +165,14 @@ export const ConversationSidebar = forwardRef<
           <Button variant="primary" size="medium" className="flex-1 transition-opacity hover:opacity-95 active:opacity-90" onClick={onNew}>
             New Conversation
           </Button>
-          <button
-            type="button"
-            onClick={() => setIsOpen(false)}
-            className="ml-2 rounded p-1.5 text-gray-500 hover:bg-gray-200 md:hidden"
-            aria-label="Close sidebar"
-          >
-            <XIcon size={20} />
-          </button>
+        <button
+          type="button"
+          onClick={() => setIsOpen(false)}
+          className="ml-2 flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded p-1.5 text-gray-500 hover:bg-gray-200 active:bg-gray-300 md:hidden"
+          aria-label="Close sidebar"
+        >
+          <XIcon size={20} />
+        </button>
         </div>
 
       <div className="flex-1 overflow-auto px-2 pb-4">
@@ -200,6 +194,7 @@ export const ConversationSidebar = forwardRef<
                 key={c.conversation_id}
                 c={c}
                 currentId={currentId}
+                onPrefetch={currentId !== c.conversation_id ? () => onPrefetch?.(c.conversation_id) : undefined}
                 onSelect={() => {
                   onSelect(c.conversation_id);
                   if (isMobile) setIsOpen(false);

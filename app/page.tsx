@@ -14,6 +14,7 @@ import { PromptChips } from "@/components/PromptChips";
 import { WhatCanIAsk } from "@/components/WhatCanIAsk";
 import { logUiEvent } from "@/lib/log-client";
 import { Button } from "@primer/react";
+import { ListUnorderedIcon } from "@primer/octicons-react";
 import Link from "next/link";
 
 type ResponseLanguage = "en" | "tl" | "taglish";
@@ -38,35 +39,25 @@ export default function Home() {
   const [dailyLimitNudge, setDailyLimitNudge] = useState(false);
   const [conversationExpired, setConversationExpired] = useState(false);
   const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>("en");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPaste, setShowPaste] = useState(false);
   const lastDeclineRef = useRef<{ query: string; timestamp: number } | null>(null);
   const sidebarRef = useRef<{ refetch: () => Promise<void> }>(null);
   const skipNextLoadRef = useRef(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesCacheRef = useRef<Map<string, { messages: Message[]; responseLanguage: ResponseLanguage }>>(new Map());
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, loading]);
 
-  const loadMessages = useCallback(async (id: string) => {
-    if (skipNextLoadRef.current) {
-      skipNextLoadRef.current = false;
-      return;
-    }
-    setConversationExpired(false);
-    const res = await fetch(`/api/conversations/${id}/messages`, {
-      credentials: "same-origin",
-    });
-    if (!res.ok) {
-      if (res.status === 410) {
-        setConversationExpired(true);
-        setMessages([]);
-      }
-      return;
-    }
-    const data = await res.json();
-    const rawMessages = data.messages ?? [];
-    const parsed: Message[] = rawMessages.map((m: { message_id: string; role: string; content: string; citations?: unknown }) => {
+  const parseMessages = useCallback((rawMessages: unknown[], data: { response_language?: string }) => {
+    const validLanguages = ["en", "tl", "taglish"];
+    const lang = (data.response_language && validLanguages.includes(data.response_language)
+      ? data.response_language
+      : "en") as ResponseLanguage;
+    const arr = rawMessages as Array<{ message_id: string; role: string; content: string; citations?: unknown }>;
+    const parsed: Message[] = arr.map((m) => {
       const citationsRaw = m.citations;
       let citations: Citation[] = [];
       let factCheck: FactCheckResult | undefined;
@@ -84,14 +75,58 @@ export default function Home() {
         factCheck,
       };
     });
-    setMessages(parsed);
-    const validLanguages = ["en", "tl", "taglish"];
-    if (data.response_language && validLanguages.includes(data.response_language)) {
-      setResponseLanguage(data.response_language as ResponseLanguage);
-    } else {
-      setResponseLanguage("en");
-    }
+    return { parsed, responseLanguage: lang };
   }, []);
+
+  const prefetchMessages = useCallback(
+    (id: string) => {
+      if (messagesCacheRef.current.has(id)) return;
+      fetch(`/api/conversations/${id}/messages`, { credentials: "same-origin" })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (!data?.messages) return;
+          const { parsed, responseLanguage: lang } = parseMessages(data.messages, data);
+          messagesCacheRef.current.set(id, { messages: parsed, responseLanguage: lang });
+        })
+        .catch(() => {});
+    },
+    [parseMessages]
+  );
+
+  const loadMessages = useCallback(
+    async (id: string) => {
+      if (skipNextLoadRef.current) {
+        skipNextLoadRef.current = false;
+        return;
+      }
+      setConversationExpired(false);
+
+      const cached = messagesCacheRef.current.get(id);
+      if (cached) {
+        setMessages(cached.messages);
+        setResponseLanguage(cached.responseLanguage);
+        return;
+      }
+
+      const res = await fetch(`/api/conversations/${id}/messages`, {
+        credentials: "same-origin",
+      });
+      if (!res.ok) {
+        if (res.status === 410) {
+          setConversationExpired(true);
+          setMessages([]);
+        }
+        return;
+      }
+      const data = await res.json();
+      const rawMessages = data.messages ?? [];
+      const { parsed, responseLanguage: lang } = parseMessages(rawMessages, data);
+      setMessages(parsed);
+      setResponseLanguage(lang);
+      messagesCacheRef.current.set(id, { messages: parsed, responseLanguage: lang });
+    },
+    [parseMessages]
+  );
 
   useEffect(() => {
     if (conversationId) {
@@ -101,6 +136,12 @@ export default function Home() {
       setConversationExpired(false);
     }
   }, [conversationId, loadMessages]);
+
+  useEffect(() => {
+    if (conversationId && messages.length > 0 && !conversationExpired) {
+      messagesCacheRef.current.set(conversationId, { messages, responseLanguage });
+    }
+  }, [conversationId, messages, responseLanguage, conversationExpired]);
 
   useEffect(() => {
     fetch("/api/usage", { credentials: "same-origin" })
@@ -226,46 +267,40 @@ export default function Home() {
         onSelect={handleSelectConversation}
         onNew={handleNewConversation}
         onDelete={(id) => {
+          messagesCacheRef.current.delete(id);
           if (id === conversationId) handleNewConversation();
         }}
+        onPrefetch={prefetchMessages}
+        open={sidebarOpen}
+        onOpenChange={setSidebarOpen}
       />
 
       <div className="flex flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-gray-200 bg-white px-6 py-4 shadow-sm">
-          <div className="flex items-center gap-4">
-            <h1 className="text-xl font-bold text-gray-900">The Docket</h1>
-            <Link
-              href="/glossary"
-              className="text-sm font-medium text-gray-600 no-underline transition-colors hover:text-gray-900"
+        <header className="relative flex items-center justify-between gap-4 border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+          <div className="flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
+            <button
+              type="button"
+              onClick={() => setSidebarOpen((v) => !v)}
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+              aria-label="Conversations"
             >
-              Glossary
-            </Link>
-            <div className="flex items-center gap-2">
-              <span className="text-sm text-gray-500">Response:</span>
-              <select
-                value={responseLanguage}
-                onChange={async (e) => {
-                  const lang = e.target.value as ResponseLanguage;
-                  setResponseLanguage(lang);
-                  if (conversationId) {
-                    await fetch(`/api/conversations/${conversationId}`, {
-                      method: "PATCH",
-                      headers: { "Content-Type": "application/json" },
-                      credentials: "same-origin",
-                      body: JSON.stringify({ response_language: lang }),
-                    });
-                  }
-                }}
-                className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm text-gray-700 transition-colors hover:border-gray-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-              >
-                <option value="en">English</option>
-                <option value="tl">Tagalog</option>
-                <option value="taglish">Tanglish</option>
-              </select>
-            </div>
+              <ListUnorderedIcon size={20} />
+            </button>
+            <h1 className="text-lg font-bold text-gray-900 sm:text-xl">The Docket</h1>
           </div>
-          <form action="/api/auth/logout" method="POST">
-            <Button variant="default" type="submit" size="small">
+          <Link
+            href="/glossary"
+            className="absolute left-1/2 -translate-x-1/2 inline-flex min-h-[44px] shrink-0 items-center rounded-lg px-2 py-2 text-sm font-medium text-gray-600 no-underline transition-colors hover:bg-gray-100 hover:text-gray-900 sm:px-0 sm:py-0 sm:hover:bg-transparent"
+          >
+            Glossary
+          </Link>
+          <form action="/api/auth/logout" method="POST" className="shrink-0">
+            <Button
+              variant="default"
+              type="submit"
+              size="small"
+              className="min-h-[44px] min-w-[44px] px-4 sm:min-h-0 sm:min-w-0"
+            >
               Sign out
             </Button>
           </form>
@@ -273,8 +308,8 @@ export default function Home() {
 
         <div className="flex-1 overflow-auto">
           {conversationExpired ? (
-            <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-              <h2 className="text-lg font-semibold text-gray-900">
+            <div className="flex h-full flex-col items-center justify-center p-4 text-center sm:p-8">
+              <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">
                 This conversation has expired
               </h2>
               <p className="mt-2 max-w-md text-sm text-gray-600">
@@ -285,8 +320,8 @@ export default function Home() {
             </Button>
             </div>
           ) : messages.length === 0 ? (
-            <div className="flex h-full flex-col items-center justify-center p-8 text-center">
-              <h2 className="text-xl font-semibold text-gray-900">
+            <div className="flex h-full flex-col items-center justify-center p-4 text-center sm:p-8">
+              <h2 className="text-lg font-semibold text-gray-900 sm:text-xl">
                 Ask a question about the Duterte ICC case
               </h2>
               <p className="mt-2 max-w-md text-sm text-gray-600">
@@ -301,7 +336,7 @@ export default function Home() {
               />
             </div>
           ) : (
-            <div className="space-y-6 p-6">
+            <div className="space-y-6 p-4 sm:p-6">
               {messages.map((m, i) => (
                 <ChatMessage
                   key={m.message_id}
@@ -339,11 +374,11 @@ export default function Home() {
           )}
         </div>
 
-        <div className="border-t border-gray-100">
+          <div className="shrink-0 border-t border-gray-100">
           <WhatCanIAsk onOpen={() => logUiEvent("what_can_i_ask_opened", {})} />
         </div>
         {dailyLimitNudge && (
-          <div className="border-t border-amber-200 bg-amber-50 px-6 py-3 text-sm text-amber-800">
+          <div className="shrink-0 border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 sm:px-6">
             You&apos;ve reached your suggested daily limit. You can still ask questions, but please
             be mindful of shared resources.
           </div>

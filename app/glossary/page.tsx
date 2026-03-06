@@ -8,6 +8,7 @@
 
 import Link from "next/link";
 import { Button } from "@primer/react";
+import { ArrowLeftIcon } from "@primer/octicons-react";
 
 const TERMS: Array<{ slug: string; term: string; definition: string }> = [
   {
@@ -80,20 +81,32 @@ const TERMS: Array<{ slug: string; term: string; definition: string }> = [
 export default function GlossaryPage() {
   return (
     <div className="min-h-screen bg-white">
-      <header className="border-b border-gray-200 bg-white px-6 py-4">
-        <div className="flex items-center justify-between">
-          <Link href="/" className="text-xl font-bold text-gray-900 hover:underline">
-            The Docket
-          </Link>
-          <form action="/api/auth/logout" method="POST">
-            <Button variant="default" type="submit" size="small">
+      <header className="border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4">
+        <div className="flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <Link
+              href="/"
+              className="flex min-h-[44px] min-w-[44px] shrink-0 items-center justify-center rounded-lg text-gray-600 transition-colors hover:bg-gray-100 hover:text-gray-900"
+              aria-label="Back to chat"
+            >
+              <ArrowLeftIcon size={20} />
+            </Link>
+            <Link
+              href="/"
+              className="hidden py-2 text-lg font-bold text-gray-900 hover:underline sm:block sm:text-xl"
+            >
+              The Docket
+            </Link>
+          </div>
+          <form action="/api/auth/logout" method="POST" className="shrink-0">
+            <Button variant="default" type="submit" size="small" className="min-h-[44px] px-4">
               Sign out
             </Button>
           </form>
         </div>
       </header>
 
-      <div className="mx-auto max-w-2xl px-6 py-8">
+      <div className="mx-auto max-w-2xl px-4 py-6 sm:px-6 sm:py-8">
         <h1 className="text-2xl font-bold text-gray-900">Glossary</h1>
         <p className="mt-2 text-sm text-gray-600">
           ICC legal and Latin terms. Ask &quot;What does [term] mean?&quot; in the chat for

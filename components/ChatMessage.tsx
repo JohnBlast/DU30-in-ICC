@@ -234,7 +234,7 @@ export function ChatMessage({
   return (
     <div className={`flex w-full min-w-0 ${isUser ? "justify-end" : "justify-start"}`}>
       <div
-        className={`group relative max-w-[85%] overflow-visible rounded-xl px-4 py-3 shadow-sm ${
+        className={`group relative max-w-[95%] overflow-visible rounded-xl px-4 py-3 shadow-sm sm:max-w-[85%] ${
           isUser
             ? "bg-blue-600 text-white"
             : "bg-gray-100 text-gray-900"
@@ -455,7 +455,7 @@ export function ChatMessage({
           aria-label="Source passage"
         >
           <div
-            className="max-h-[85vh] w-full max-w-xl overflow-auto rounded-xl border border-gray-200 bg-white p-6 shadow-2xl"
+            className="max-h-[85dvh] w-full max-w-xl overflow-auto rounded-xl border border-gray-200 bg-white p-4 shadow-2xl sm:p-6"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start justify-between gap-4">

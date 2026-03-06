@@ -56,8 +56,8 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen flex-col items-center justify-center p-8">
-      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-8 shadow-sm">
+    <main className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8">
+      <div className="w-full max-w-sm rounded-lg border border-gray-200 bg-white p-6 shadow-sm sm:p-8">
         <h1 className="text-2xl font-bold text-gray-900">The Docket</h1>
         <p className="mt-1 text-sm text-gray-600">ICC Philippines Case Q&A</p>
 

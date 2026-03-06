@@ -41,3 +41,14 @@ body > div > * > * {
   outline: 2px solid #2563eb;
   outline-offset: 2px;
 }
+
+/* Mobile: remove tap highlight, support safe areas (notched phones) */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+@supports (padding: env(safe-area-inset-bottom)) {
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

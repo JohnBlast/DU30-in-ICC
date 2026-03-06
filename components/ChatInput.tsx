@@ -64,7 +64,7 @@ export function ChatInput({
 
   if (capExceeded) {
     return (
-      <div className="border-t border-gray-200 bg-gray-50 p-6">
+      <div className="border-t border-gray-200 bg-gray-50 p-4 sm:p-6">
         <p className="text-center text-gray-700">
           The Q&A service has reached its monthly usage limit. You can still browse your
           conversations and the document library. Service resets on {resetDate || "the 1st"}.
@@ -74,15 +74,19 @@ export function ChatInput({
   }
 
   return (
-    <form onSubmit={handleSubmit} className="border-t border-gray-200 bg-white p-4 transition-colors">
+    <form
+      onSubmit={handleSubmit}
+      className="border-t border-gray-200 bg-white p-3 transition-colors sm:p-4"
+    >
       {showPaste && (
-        <div className="mb-4 rounded-lg border-2 border-blue-200 bg-blue-50/50 p-4 transition-all duration-200">
+        <div className="mb-4 rounded-lg border-2 border-blue-200 bg-blue-50/50 p-3 transition-all duration-200 sm:p-4">
           <label className="mb-2 flex items-center gap-2 text-sm font-semibold text-gray-800">
             <PasteIcon size={16} />
             Paste content from social media to fact-check it
           </label>
           <p className="mb-2 text-xs text-gray-600">
-            Paste ICC document text or a social media post. Then ask &quot;Is this accurate?&quot; or &quot;Fact-check this&quot;
+            Paste ICC document text or a social media post. Then ask &quot;Is this accurate?&quot; or
+            &quot;Fact-check this&quot;
           </p>
           <Textarea
             value={pastedText}
@@ -95,8 +99,8 @@ export function ChatInput({
         </div>
       )}
 
-      <div className="flex gap-3">
-        <div className="flex-1 min-w-0">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex min-h-[44px] flex-1 min-w-0 items-stretch sm:min-h-0">
           <TextInput
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -105,23 +109,27 @@ export function ChatInput({
             block
           />
         </div>
-        <Button
-          type="button"
-          variant="default"
-          onClick={() => setShowPaste(!showPaste)}
-          disabled={disabled}
-          leadingVisual={PasteIcon}
-          title={showPaste ? "Hide paste area" : "Paste ICC document or social media to verify"}
-        >
-          {showPaste ? "Hide" : "Paste"}
-        </Button>
-        <Button
-          type="submit"
-          variant="primary"
-          disabled={disabled || !query.trim()}
-        >
-          Send
-        </Button>
+        <div className="flex gap-2 sm:gap-3">
+          <Button
+            type="button"
+            variant="default"
+            onClick={() => setShowPaste(!showPaste)}
+            disabled={disabled}
+            leadingVisual={PasteIcon}
+            title={showPaste ? "Hide paste area" : "Paste ICC document or social media to verify"}
+            className="min-h-[44px] flex-1 sm:min-h-0 sm:flex-initial"
+          >
+            {showPaste ? "Hide" : "Paste"}
+          </Button>
+          <Button
+            type="submit"
+            variant="primary"
+            disabled={disabled || !query.trim()}
+            className="min-h-[44px] flex-1 sm:min-h-0 sm:flex-initial"
+          >
+            Send
+          </Button>
+        </div>
       </div>
     </form>
   );
