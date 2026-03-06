@@ -41,6 +41,7 @@ export default function Home() {
   const [responseLanguage, setResponseLanguage] = useState<ResponseLanguage>("en");
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showPaste, setShowPaste] = useState(false);
+  const [loadingMessages, setLoadingMessages] = useState(false);
   const lastDeclineRef = useRef<{ query: string; timestamp: number } | null>(null);
   const sidebarRef = useRef<{ refetch: () => Promise<void> }>(null);
   const skipNextLoadRef = useRef(false);
@@ -93,6 +94,14 @@ export default function Home() {
     [parseMessages]
   );
 
+  const onConversationsLoaded = useCallback(
+    (ids: string[]) => {
+      const mostRecent = ids[0];
+      if (mostRecent) prefetchMessages(mostRecent);
+    },
+    [prefetchMessages]
+  );
+
   const loadMessages = useCallback(
     async (id: string) => {
       if (skipNextLoadRef.current) {
@@ -105,25 +114,31 @@ export default function Home() {
       if (cached) {
         setMessages(cached.messages);
         setResponseLanguage(cached.responseLanguage);
+        setLoadingMessages(false);
         return;
       }
 
-      const res = await fetch(`/api/conversations/${id}/messages`, {
-        credentials: "same-origin",
-      });
-      if (!res.ok) {
-        if (res.status === 410) {
-          setConversationExpired(true);
-          setMessages([]);
+      setLoadingMessages(true);
+      setMessages([]);
+      try {
+        const res = await fetch(`/api/conversations/${id}/messages`, {
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          if (res.status === 410) {
+            setConversationExpired(true);
+          }
+          return;
         }
-        return;
+        const data = await res.json();
+        const rawMessages = data.messages ?? [];
+        const { parsed, responseLanguage: lang } = parseMessages(rawMessages, data);
+        setMessages(parsed);
+        setResponseLanguage(lang);
+        messagesCacheRef.current.set(id, { messages: parsed, responseLanguage: lang });
+      } finally {
+        setLoadingMessages(false);
       }
-      const data = await res.json();
-      const rawMessages = data.messages ?? [];
-      const { parsed, responseLanguage: lang } = parseMessages(rawMessages, data);
-      setMessages(parsed);
-      setResponseLanguage(lang);
-      messagesCacheRef.current.set(id, { messages: parsed, responseLanguage: lang });
     },
     [parseMessages]
   );
@@ -134,6 +149,7 @@ export default function Home() {
     } else {
       setMessages([]);
       setConversationExpired(false);
+      setLoadingMessages(false);
     }
   }, [conversationId, loadMessages]);
 
@@ -271,6 +287,7 @@ export default function Home() {
           if (id === conversationId) handleNewConversation();
         }}
         onPrefetch={prefetchMessages}
+        onConversationsLoaded={onConversationsLoaded}
         open={sidebarOpen}
         onOpenChange={setSidebarOpen}
       />
@@ -318,6 +335,17 @@ export default function Home() {
             <Button variant="primary" onClick={handleNewConversation} className="mt-4">
               New conversation
             </Button>
+            </div>
+          ) : loadingMessages ? (
+            <div className="flex h-full flex-col items-center justify-center p-4 text-center sm:p-8">
+              <div className="flex flex-col items-center gap-4">
+                <div className="flex gap-1.5">
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500 [animation-delay:-0.3s]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500 [animation-delay:-0.15s]" />
+                  <span className="h-2 w-2 animate-bounce rounded-full bg-blue-500" />
+                </div>
+                <p className="text-sm text-gray-600">Loading conversation…</p>
+              </div>
             </div>
           ) : messages.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center p-4 text-center sm:p-8">

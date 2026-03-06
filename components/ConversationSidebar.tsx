@@ -27,6 +27,7 @@ interface ConversationSidebarProps {
   onNew: () => void;
   onDelete?: (id: string) => void;
   onPrefetch?: (id: string) => void;
+  onConversationsLoaded?: (conversationIds: string[]) => void;
   /** Controlled open state (optional). If not provided, sidebar manages its own state. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
@@ -105,7 +106,7 @@ async function fetchConversations(): Promise<{ conversations: Conversation[]; er
 export const ConversationSidebar = forwardRef<
   { refetch: () => Promise<void> },
   ConversationSidebarProps
->(function ConversationSidebar({ currentId, onSelect, onNew, onDelete, onPrefetch, open: controlledOpen, onOpenChange }, ref) {
+>(function ConversationSidebar({ currentId, onSelect, onNew, onDelete, onPrefetch, onConversationsLoaded, open: controlledOpen, onOpenChange }, ref) {
   const [internalOpen, setInternalOpen] = useState(true);
   const isOpen = controlledOpen ?? internalOpen;
   const setIsOpen = onOpenChange ?? setInternalOpen;
@@ -129,13 +130,15 @@ export const ConversationSidebar = forwardRef<
       const result = await fetchConversations();
       setConversations(result.conversations);
       if (result.error) setFetchError(result.error);
+      const ids = result.conversations.map((c) => c.conversation_id);
+      if (ids.length > 0) onConversationsLoaded?.(ids);
     } catch {
       setConversations([]);
       setFetchError("Failed to load conversations");
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [onConversationsLoaded]);
 
   useImperativeHandle(ref, () => ({ refetch }), [refetch]);
 
