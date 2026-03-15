@@ -64,6 +64,18 @@ function requiresDualIndex(intent: IntentCategory, query: string): boolean {
   // Next step / what happens now
   if (/next\s+step|what('s|\s+is)\s+next|what\s+happens\s+now|what\s+happens\s+next/i.test(q)) return true;
 
+  // Case summary / status / update — need both legal framework and case docs
+  if (/\b(summary|summarize|overview|briefing|at\s+a\s+glance|catch\s+me\s+up)\b.*\b(case|duterte|icc)\b/i.test(q)) return true;
+  if (/\b(case|duterte|icc)\b.*\b(summary|summarize|overview|briefing|at\s+a\s+glance)\b/i.test(q)) return true;
+  if (/^(can\s+you\s+)?(give\s+me\s+)?(a\s+)?(summary|summarize|overview|briefing)\s*[?.!]?$/i.test(q.trim())) return true;
+  if (/\bwhere\s+(is|are)\s+(the\s+)?(case|we)\s+(at|now)\b/i.test(q)) return true;
+  // App scope: only Duterte ICC case — "the case" / "this case" always means that case; dual-index for full coverage
+  if (intent === "case_facts" && /\b(the|this|that)\s+case\b/i.test(q)) return true;
+  if (/\b(update|latest|current)\s+(on\s+)?(the\s+)?(case|duterte)\b/i.test(q)) return true;
+  if (/\b(key\s+information|critical\s+info|important\s+(facts|information))\b.*\b(case|duterte)\b/i.test(q)) return true;
+  if (/\b(how\s+is\s+the\s+case\s+going|what('s|\s+is)\s+the\s+latest)\b/i.test(q)) return true;
+  if (/\b(give\s+me\s+an?\s+)?(update|summary|briefing)\b/i.test(q) && /\b(case|duterte|icc)\b/i.test(q)) return true;
+
   // Term definition + case application
   if (/\b(proprio\s+motu|in\s+absentia)\b.*\b(duterte|case)\b/i.test(q)) return true;
 

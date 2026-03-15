@@ -198,8 +198,43 @@ function enforceDocDiversity(
 }
 
 
+/** Detect case-summary intent (user wants case-at-a-glance). */
+function isCaseSummaryQuery(q: string): boolean {
+  return (
+    /\b(summary|summarize|overview|briefing|at\s+a\s+glance|catch\s+me\s+up)\b.*\b(case|duterte|icc)\b/i.test(q) ||
+    /\b(case|duterte|icc)\b.*\b(summary|summarize|overview|briefing|at\s+a\s+glance)\b/i.test(q) ||
+    /\b(give\s+me\s+an?\s+)?(update|summary|briefing)\b/i.test(q) ||
+    /\bwhere\s+(is|are)\s+(the\s+)?(case|we)\s+(at|now)\b/i.test(q) ||
+    /\b(update|latest|current)\s+(on\s+)?(the\s+)?(case|duterte)\b/i.test(q)
+  );
+}
+
+/**
+ * App scope: only the Duterte ICC case is in scope. Any reference to "the case",
+ * "this case", etc. without naming another matter means the Duterte ICC case.
+ * Used to expand retrieval and to trigger extended top-k for case queries.
+ */
+export function isSingleCaseContext(q: string): boolean {
+  return (
+    /\b(the|this|that|current)\s+case\b/i.test(q) ||
+    /\bcase\s+(status|summary|update|information|overview|at\s+a\s+glance|so\s+far)\b/i.test(q) ||
+    /\b(about|regarding|pertaining\s+to)\s+(the\s+)?case\b/i.test(q) ||
+    /\b(the\s+)?(icc|philippines)\s+case\b/i.test(q) ||
+    /\bwhat('s|\s+is)\s+(the\s+)?(status|latest|update)\s+(of\s+)?(the\s+)?case\b/i.test(q) ||
+    /\bwhere\s+(is|are)\s+(the\s+)?case\b/i.test(q)
+  );
+}
+
 /** Expand query for better embedding match on domain-specific terms. */
 function expandQueryForEmbedding(query: string): string {
+  // Case summary: broaden so retrieval finds charges, warrant, evidence, timeline chunks
+  if (isCaseSummaryQuery(query)) {
+    return `${query} Duterte ICC case charges arrest warrant confirmation of charges key evidence timeline surrender Philippines`;
+  }
+  // App covers only Duterte ICC case: "the case" / "this case" = Duterte — expand so retrieval finds the right docs
+  if (isSingleCaseContext(query)) {
+    return `${query} Duterte ICC case charges arrest warrant Philippines`;
+  }
   if (/\btokhang\b/i.test(query) && !/\b(operation|campaign|drug|anti)\b/i.test(query)) {
     return query + " Philippine anti-drug operation campaign killings ICC case";
   }
@@ -247,6 +282,11 @@ const FTS_SYNONYMS: Record<string, string> = {
 /** Expand query with ICC terminology synonyms for better FTS match. */
 function expandQueryForFts(query: string): string {
   let expanded = query;
+  if (isCaseSummaryQuery(query)) {
+    expanded += " Duterte ICC charges arrest warrant confirmation evidence timeline surrender case information";
+  } else if (isSingleCaseContext(query)) {
+    expanded += " Duterte ICC case charges arrest warrant Philippines";
+  }
   if (/\bclosing\s+statement(s)?\b/i.test(expanded) && !/\bclosing\s+submission/i.test(expanded)) {
     expanded += " closing submissions";
   }

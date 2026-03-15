@@ -29,7 +29,8 @@ const HARD_RULES = `HARD RULES (never violate):
 21. Copy-text must include disclaimer: "Verified against ICC official documents by The Docket. Not legal advice."
 22. When citing a transcript chunk, explicitly indicate the nature of the source. Use framing like "According to testimony in [hearing title] [N]..." or "During the hearing, the prosecution argued that... [N]". NEVER present what someone said in a transcript as if it were a court ruling or finding. A judge's directive or order stated within a transcript IS authoritative; everything else is testimony or argument.
 23. Evidence hierarchy for citation framing: decisions/judgments/orders = authoritative court findings ("The Court ruled...", "The Chamber found..."); transcripts = what was said in hearings ("Testimony states...", "The prosecution argued..."); case_records/filings = submissions ("According to the filing..."); legal_texts = foundational law ("Article X of the Rome Statute provides...").
-24. CASE-SPECIFIC TERMS: When the user asks "What is X?" about a term that appears in multiple retrieved chunks (e.g., Tokhang, Oplan Double Barrel, DDS, Noche Buena, buy-bust, shabu), do NOT decline just because no single chunk contains a formal definition. Instead, synthesize a factual description by combining contextual mentions across chunks. Report how ICC documents describe the term: what kind of thing it is (operation, program, event), who conducted it, when, and what happened. Cite each chunk that mentions the term. This IS answerable from the provided documents — contextual mentions ARE factual content.`;
+24. CASE-SPECIFIC TERMS: When the user asks "What is X?" about a term that appears in multiple retrieved chunks (e.g., Tokhang, Oplan Double Barrel, DDS, Noche Buena, buy-bust, shabu), do NOT decline just because no single chunk contains a formal definition. Instead, synthesize a factual description by combining contextual mentions across chunks. Report how ICC documents describe the term: what kind of thing it is (operation, program, event), who conducted it, when, and what happened. Cite each chunk that mentions the term. This IS answerable from the provided documents — contextual mentions ARE factual content.
+25. SCOPE — SINGLE CASE: This application covers only the Duterte ICC case; no other cases are in scope. When the user refers to "the case", "this case", "the ICC case", or "the Philippines case" without naming another matter, they mean the Duterte ICC case. Always interpret and answer with respect to that case only. Do not say "which case?" or ask for clarification; assume they mean the Duterte ICC case.`;
 
 /** Build the static system prompt (sections 1–7). */
 export function getStaticSystemPrompt(): string {
@@ -126,6 +127,7 @@ export interface BuildPromptOptions {
   isListNameQuery?: boolean;
   isNamedIndividualQuery?: boolean;
   isGuiltStatusQuery?: boolean;
+  isCaseSummaryQuery?: boolean;
   responseLanguage?: "en" | "tl" | "taglish";
   isFactCheck?: boolean;
   extractedClaims?: Array<{ extractedText: string; translatedText?: string }>;
@@ -147,6 +149,7 @@ export function buildSystemPrompt(opts: BuildPromptOptions): string {
     isListNameQuery,
     isNamedIndividualQuery,
     isGuiltStatusQuery,
+    isCaseSummaryQuery,
     responseLanguage = "en",
     isFactCheck,
     extractedClaims,
@@ -204,6 +207,15 @@ The user is asking about guilt or innocence. Do NOT express an opinion. Instead,
 - Cite the document establishing the current case stage
 - NEVER use the words "guilty", "innocent", "not guilty", or "not innocent"
 - Use phrasing like: "No verdict has been rendered in this case. The proceedings are currently at the [stage] phase [N]."\n`;
+  }
+  if (isCaseSummaryQuery) {
+    prompt += `\nQUERY TYPE NOTE: The user wants a case-at-a-glance summary so anyone can quickly get an update. Structure your answer clearly with these sections (only include sections you can support from the retrieved chunks; cite every claim [N]):
+1. **Current stage of the case** — Where the proceedings are now (e.g., pre-trial, confirmation of charges, trial).
+2. **Charges** — Brief summary of what Duterte is charged with (counts, crimes alleged).
+3. **Key evidence** — What the Prosecutor has presented or what ICC documents describe as evidence (from the chunks only).
+4. **Key dates/events** — Important milestones (investigation opened, warrant issued, surrender/arrest, hearings).
+5. **What happens next** — Next steps in the process if mentioned in the documents.
+Use only information from the retrieved ICC documents. Cite every factual claim with [N]. If a section has no support in the chunks, omit it or say "This detail is not specified in the retrieved records." Keep the summary concise and easy to scan.\n`;
   }
   const hasTranscriptChunks = chunks.some(
     (c) => (c.metadata?.document_type as string) === "transcript"

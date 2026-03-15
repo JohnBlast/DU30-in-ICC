@@ -25,7 +25,7 @@ const INTENT_PROMPT = `You classify user questions about the Duterte ICC case.
 Respond with exactly one of these words: case_facts, case_timeline, legal_concept, procedure, glossary, paste_text, fact_check, out_of_scope
 
 - fact_check: User pasted social media content for claim verification (not ICC document text)
-- case_facts: "What is Duterte charged with?", "Who are the victims?", "How many counts?", "What are the evidences against Duterte?", "Who are the judges?", "Is Du30 fit to stand trial?", "Who pays for Duterte's defence?", "Where is Duterte detained?", "Did Duterte surrender or was he arrested?", "measures to facilitate attendance", "What did the prosecutor say at the hearing?", "What was the defense's argument?", "What were the closing statements of the defence during the confirmation of charges?", "What is Tokhang?", "What were the operations during the war on drugs?", "What is the Davao Death Squad?", "How many were killed in the drug war?", "What is Oplan Double Barrel?", "What are the charges?", "What evidence is there?", "What's the status of the case?", "Has he been arrested?", "What are Duterte's rights?", "What are the allegations against Duterte?", "Who is the judge?", "Is there a trial yet?", "Can you tell me about [named person]?", "Who is Vicente Danao?", "What is the role of Ronald Dela Rosa?"
+- case_facts: "What is Duterte charged with?", "Who are the victims?", "How many counts?", "What are the evidences against Duterte?", "Who are the judges?", "Is Du30 fit to stand trial?", "Who pays for Duterte's defence?", "Where is Duterte detained?", "Did Duterte surrender or was he arrested?", "measures to facilitate attendance", "What did the prosecutor say at the hearing?", "What was the defense's argument?", "What were the closing statements of the defence during the confirmation of charges?", "What is Tokhang?", "What were the operations during the war on drugs?", "What is the Davao Death Squad?", "How many were killed in the drug war?", "What is Oplan Double Barrel?", "What are the charges?", "What evidence is there?", "What's the status of the case?", "Has he been arrested?", "What are Duterte's rights?", "What are the allegations against Duterte?", "Who is the judge?", "Is there a trial yet?", "Can you tell me about [named person]?", "Who is Vicente Danao?", "What is the role of Ronald Dela Rosa?", "Give me a summary of where the case is at", "Where is the Duterte ICC case now?", "Update on the case", "Key information about the case", "Case at a glance", "What's the latest on the case?"
 - case_timeline: "When did the ICC open the investigation?", "What's the timeline?", "When was the arrest warrant issued?", "When did the Philippines withdraw?", "What happened at the February 2026 hearing?", "Key dates of the case?"
 - legal_concept: "What is Article 7?", "What are crimes against humanity?", "What does the Rome Statute say about withdrawal?", "What is complementarity?", "What is an Article 18 deferral?", "What is indirect co-perpetration?", "What are the elements of murder as a crime against humanity?"
 - procedure: "What happens after confirmation of charges?", "What is the next step in the case?", "Can he be tried in absentia?", "What is an Article 18 deferral?", "Can the Philippines challenge admissibility?", "What is complementarity?", "What happens after this?", "Can the case be dismissed?", "What steps occur if charges are confirmed?"
@@ -165,6 +165,30 @@ function layer2Regex(cleanedQuery: string): { intent: IntentCategory; confidence
   if (/next\s+step|what\s+happens\s+next|next\s+steps|what('s|\s+is)\s+next|what\s+happens\s+now/i.test(q)) return { intent: "procedure", confidence: "high" };
   if (/what\s+happens\s+after\s+(confirmation|charges)/i.test(q)) return { intent: "procedure", confidence: "high" };
   if (/\bhas\s+.{1,40}(been\s+convicted|trial\s+started|started\s+yet)\b/i.test(q)) return { intent: "case_facts", confidence: "high" };
+
+  // Case summary / status / update (user wants case-at-a-glance)
+  if (/\b(summary|summarize|overview|briefing|at\s+a\s+glance|catch\s+me\s+up)\b.*\b(case|duterte|icc)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(case|duterte|icc)\b.*\b(summary|summarize|overview|briefing|at\s+a\s+glance)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  // "Give me a summary" / "Can you summarize?" without "case" — in this app context = case summary
+  if (/^(can\s+you\s+)?(give\s+me\s+)?(a\s+)?(summary|summarize|overview|briefing)\s*[?.!]?$/i.test(q.trim()))
+    return { intent: "case_facts", confidence: "high" };
+  // App scope: only Duterte ICC case. "The case" / "this case" = that case — route to case_facts (LLM can override for procedure/legal if needed)
+  if (/\b(the|this|that)\s+case\b/i.test(q) && !/\b(other\s+case|another\s+case|compare|comparison|vs\.|versus)\b/i.test(q))
+    return { intent: "case_facts", confidence: "low" };
+  if (/^(I('d|\s+would)\s+like\s+(a\s+)?(summary|overview|briefing)|(a\s+)?summary\s+(please|of\s+the\s+case)?)\s*[?.!]?$/i.test(q.trim()))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\bwhere\s+(is|are)\s+(the\s+)?(case|we)\s+(at|now)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(update|latest|current)\s+(on\s+)?(the\s+)?(case|duterte)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(give\s+me\s+an?\s+)?(update|summary|briefing)\b/i.test(q) && /\b(case|duterte|icc)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(key\s+information|critical\s+info|important\s+(facts|information))\b.*\b(case|duterte)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
+  if (/\b(how\s+is\s+the\s+case\s+going|what('s|\s+is)\s+the\s+latest)\b/i.test(q))
+    return { intent: "case_facts", confidence: "high" };
 
   // Standalone case-context questions (cursor-false-decline-reduction P0-3)
   if (/\b(what|tell\s+me\s+about)\s+(are\s+)?(the\s+)?(charges?|counts?|allegations?|indictment)\b/i.test(q))

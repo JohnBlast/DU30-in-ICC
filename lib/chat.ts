@@ -8,7 +8,7 @@ import { createClient } from "@supabase/supabase-js";
 import { getOpenAIClient } from "./openai-client";
 import { classifyIntent } from "./intent-classifier";
 import { intentToRagIndexes } from "./intent";
-import { retrieve, evidenceSufficiency, type RetrievalChunk } from "./retrieve";
+import { retrieve, evidenceSufficiency, isSingleCaseContext, type RetrievalChunk } from "./retrieve";
 import { buildSystemPrompt, buildJudgeUserMessage, JUDGE_SYSTEM_PROMPT } from "./prompts";
 import { verifyEnumeratedClaims } from "./claim-verifier";
 import { logEvent } from "./logger";
@@ -652,13 +652,24 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
   const isNamedIndividualQuery =
     /\b(dela\s+rosa|delarosa|cascolan|albayalde|bong\s*'?\s*go|danao|aguirre|lap[eé]ña|lapena)\b/i.test(effectiveQuery) &&
     /\b(role|position|what\s+did|involvement|who\s+is|tell\s+me\s+about|about|what\s+do\s+you\s+know|information\s+about)\b/i.test(effectiveQuery);
+  const isCaseSummaryQuery =
+    /\b(summary|summarize|overview|briefing|at\s+a\s+glance|catch\s+me\s+up)\b.*\b(case|duterte|icc)\b/i.test(effectiveQuery) ||
+    /\b(case|duterte|icc)\b.*\b(summary|summarize|overview|briefing|at\s+a\s+glance)\b/i.test(effectiveQuery) ||
+    /^(can\s+you\s+)?(give\s+me\s+)?(a\s+)?(summary|summarize|overview|briefing)\s*[?.!]?$/i.test(effectiveQuery.trim()) ||
+    /\bwhere\s+(is|are)\s+(the\s+)?(case|we)\s+(at|now)\b/i.test(effectiveQuery) ||
+    /\b(update|latest|current)\s+(on\s+)?(the\s+)?(case|duterte)\b/i.test(effectiveQuery) ||
+    /\b(key\s+information|critical\s+info|important\s+(facts|information))\b.*\b(case|duterte)\b/i.test(effectiveQuery) ||
+    /\b(how\s+is\s+the\s+case\s+going|what('s|\s+is)\s+the\s+latest)\b/i.test(effectiveQuery) ||
+    (/\b(give\s+me\s+an?\s+)?(update|summary|briefing)\b/i.test(effectiveQuery) && /\b(case|duterte|icc)\b/i.test(effectiveQuery));
   const retrieveResult = await retrieve({
     query: effectiveQuery,
     pastedText: effectivePastedText,
     ragIndexes,
     intent,
     documentType: isHearingContentQuery ? "transcript" : undefined,
-    useExtendedTopK: intent === "case_facts" && (isDrugWarTermQuery || isListNameQuery),
+    useExtendedTopK:
+      intent === "case_facts" &&
+      (isDrugWarTermQuery || isListNameQuery || isCaseSummaryQuery || isSingleCaseContext(effectiveQuery)),
   });
   const { chunks, pasteTextMatched, retrievalConfidence } = retrieveResult;
 
@@ -713,6 +724,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     isListNameQuery,
     isNamedIndividualQuery,
     isGuiltStatusQuery,
+    isCaseSummaryQuery,
     responseLanguage,
     originalQuery,
   });
