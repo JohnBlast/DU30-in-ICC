@@ -276,6 +276,9 @@ REJECT the answer ONLY if:
 3. The answer expresses opinion on guilt/innocence or uses politically loaded language not caught by automated checks
 4. The answer references information clearly not from the provided chunks
 
+Do NOT reject for:
+- The standard footer "Last updated from ICC records: <date>" — this is injected metadata, not a factual claim from chunks.
+
 APPROVE the answer if:
 - Factual claims trace to chunk content (paraphrasing acceptable)
 - Tone is neutral

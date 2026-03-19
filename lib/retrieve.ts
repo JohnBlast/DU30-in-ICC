@@ -68,12 +68,19 @@ export interface RetrieveResult {
 /**
  * Evidence sufficiency (docket-improvement-plan.md §16).
  * Gate: if insufficient, do not generate — return structured "lack of data" message.
+ * For glossary/legal_concept, 1 chunk can suffice (definition-style queries).
  */
-export function evidenceSufficiency(result: RetrieveResult): "sufficient" | "insufficient" {
+export function evidenceSufficiency(
+  result: RetrieveResult,
+  intent?: string
+): "sufficient" | "insufficient" {
   const { chunks, retrievalConfidence } = result;
   if (chunks.length === 0) return "insufficient";
   if (chunks.length >= 2) return "sufficient";
-  if (chunks.length === 1 && retrievalConfidence === "low") return "insufficient";
+  if (chunks.length === 1 && retrievalConfidence === "low") {
+    if (intent === "glossary" || intent === "legal_concept") return "sufficient";
+    return "insufficient";
+  }
   return "sufficient";
 }
 

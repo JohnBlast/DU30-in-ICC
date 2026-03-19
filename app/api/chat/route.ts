@@ -45,6 +45,7 @@ export async function POST(req: Request) {
       );
     }
     const sanitizedQuery = validation.sanitizedQuery!;
+    const sanitizedPaste = validation.sanitizedPaste ?? (typeof pastedText === "string" ? pastedText.trim() : undefined);
 
     const usageStatus = await getUsageStatus(userId);
     if (!usageStatus.underCap) {
@@ -134,14 +135,14 @@ export async function POST(req: Request) {
 
     const result = await chat({
       query: sanitizedQuery,
-      pastedText: typeof pastedText === "string" ? pastedText.trim() : undefined,
+      pastedText: sanitizedPaste,
       conversationHistory,
       responseLanguage,
     });
 
     if (convId) {
-      const userContent = pastedText
-        ? `[Pasted text]\n${pastedText}\n\n${sanitizedQuery}`
+      const userContent = sanitizedPaste
+        ? `[Pasted text]\n${sanitizedPaste}\n\n${sanitizedQuery}`
         : sanitizedQuery;
 
       const assistantCitations =

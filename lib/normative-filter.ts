@@ -5,8 +5,13 @@
 
 const NORMATIVE_PATTERNS = [
   /\b(is|are|was|were)\s+(the\s+)?(icc|duterte|case)\s+(hypocritical|justified|right|wrong|fair|biased|legitimate)\b/i,
+  /\b(was|is)\s+(that|it)\s+(fair|justified|right|wrong|biased)\b/i,
   /\b(violation of sovereignty|illegal|unlawful)\s*\??\s*$/i,
-  /\bis\s+(duterte|he)\s+(a\s+)?(hero|villain|tyrant|saint|murderer)\b/i,
+  /\b(is|are|was|were)\s+(duterte|he)\s+(a\s+)?(hero|villain|tyrant|saint|murderer)\b/i,
+  /\b(he|duterte|du30)(?:'s|\s+is)\s+(a\s+)?(hero|villain|tyrant|saint|murderer)\b/i,
+  /\b(would\s+you\s+say|would\s+you\s+agree)\b.*\b(evidence|charges)\b/i,
+  /\bevidence\s+(strongly\s+)?(supports?|suggests?|indicates?)\s+(the\s+)?(charges?|case)\b/i,
+  /\b(is|are)\s+(he|duterte|du30|the\s+accused)\s+(guilty|innocent)\b/i,
   /\b(should|ought|must)\s+(the\s+)?(icc|philippines|duterte)\b/i,
   /\b(do\s+you\s+think|what\s+do\s+you\s+think|in\s+your\s+opinion|what'?s?\s+your\s+(opinion|take))\b/i,
   /\b(morally|ethically)\s+(right|wrong|justified)\b/i,
@@ -43,6 +48,6 @@ export function isNormativeQuery(query: string): boolean {
   return NORMATIVE_PATTERNS.some((p) => p.test(q));
 }
 
-/** Message for normative refusal */
+/** Message for normative refusal (constitution: flat decline, no redirection) */
 export const NORMATIVE_REFUSAL_MESSAGE =
-  "This question asks for an evaluation or opinion. The Docket only answers factual questions from ICC documents.";
+  "This is not addressed in current ICC records.";

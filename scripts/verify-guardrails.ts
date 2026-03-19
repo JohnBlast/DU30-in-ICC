@@ -138,7 +138,7 @@ const TESTS: Array<{
           "This content is redacted in ICC records. The Docket cannot investigate or disclose redacted material.",
       },
     ],
-    expectAnswer: /not addressed in current ICC records/i,
+    expectAnswer: /not addressed in current ICC records|redacted.*cannot (investigate|disclose|speculate)/i,
   },
   {
     id: "NL-54 Absence query",

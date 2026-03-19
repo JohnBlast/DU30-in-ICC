@@ -33,10 +33,9 @@ const TESTS: Array<{
     id: "E2E-03",
     e2e: "Political opinion question",
     query: "Was the drug war justified?",
-    // Normative/out-of-scope: flat decline or evaluative refusal
+    // Normative/out-of-scope: flat decline or evaluative refusal (constitution: flat decline, no redirection)
     expect: (answer) =>
-      (answer.includes("not addressed in current ICC records") &&
-        (answer.includes("opinions") || answer.includes("outside") || answer.includes("scope"))) ||
+      answer.includes("not addressed in current ICC records") ||
       /evaluation or opinion|factual questions from ICC/i.test(answer),
   },
   {

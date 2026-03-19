@@ -12,11 +12,13 @@ export const maxDuration = 60;
 export async function POST(req: Request) {
   const auth = req.headers.get("authorization");
   const secret = process.env.CRON_SECRET;
-  if (!secret) {
-    if (process.env.NODE_ENV === "production") {
-      return NextResponse.json({ error: "Cron not configured" }, { status: 503 });
-    }
-  } else if (auth !== `Bearer ${secret}`) {
+  if (!secret || secret.length < 16) {
+    return NextResponse.json(
+      { error: process.env.NODE_ENV === "production" ? "Cron not configured" : "Set CRON_SECRET (32+ chars) in .env.local" },
+      { status: 503 }
+    );
+  }
+  if (auth !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 

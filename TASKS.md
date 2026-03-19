@@ -86,6 +86,9 @@ FIRECRAWL_API_KEY=fc-...your-key-here...
 # Auth (Task Group 7) — generate with: openssl rand -hex 32
 AUTH_SECRET=your-32-char-minimum-secret
 
+# Vercel Cron (required for /api/cron/*) — generate with: openssl rand -hex 32
+# CRON_SECRET=your-32-char-secret
+
 # LangSmith (optional) — LLM tracing and debugging. Sign up: smith.langchain.com
 # LANGSMITH_TRACING=true
 # LANGSMITH_API_KEY=ls_...

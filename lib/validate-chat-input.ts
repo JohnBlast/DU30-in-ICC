@@ -11,6 +11,7 @@ export interface ValidateResult {
   valid: boolean;
   error?: string;
   sanitizedQuery?: string;
+  sanitizedPaste?: string;
 }
 
 export function validateChatInput(
@@ -28,5 +29,9 @@ export function validateChatInput(
     return { valid: false, error: "Pasted text exceeds maximum length" };
   }
   const sanitizedQuery = trimmedQuery.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "");
-  return { valid: true, sanitizedQuery };
+  const sanitizedPaste =
+    typeof pastedText === "string"
+      ? pastedText.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+      : undefined;
+  return { valid: true, sanitizedQuery, sanitizedPaste };
 }

@@ -687,7 +687,7 @@ export async function chat(opts: ChatOptions): Promise<ChatResponse> {
     };
   }
 
-  if (evidenceSufficiency(retrieveResult) === "insufficient") {
+  if (evidenceSufficiency(retrieveResult, intent) === "insufficient") {
     logEvent("chat.flat_decline", "warn", { intent, reason: "evidence_insufficient" });
     const kbDate = await getKnowledgeBaseLastUpdated();
     return {

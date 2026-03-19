@@ -20,7 +20,11 @@ const PROCEDURAL_STATUS_EXEMPT_DJ = [
   /\bno\s+trial\s+has\b/i,
 ];
 
-const PROHIBITED_PATTERNS = [
+const PROHIBITED_PATTERNS: Array<{
+  pattern: RegExp;
+  label: string;
+  exempt?: (line: string, fullAnswer: string) => boolean;
+}> = [
   {
     pattern: /\b(he|duterte|du30|the\s+accused)\s+(is|was)\s+not\s+(guilty|innocent)\b/i,
     label: "negated guilt/innocence opinion",
@@ -42,8 +46,16 @@ const PROHIBITED_PATTERNS = [
     label: "loaded characterization",
   },
   {
-    pattern: /\b(witch\s+hunt|persecution|justice\s+served)\b/i,
+    pattern: /\b(witch\s+hunt|justice\s+served)\b/i,
     label: "politically loaded term",
+  },
+  {
+    pattern: /\bpersecution\b/i,
+    label: "politically loaded term",
+    exempt: (_line, fullAnswer) =>
+      /\b(Article\s+7|Rome\s+Statute|crimes?\s+against\s+humanity|definition|paragraph\s*\([a-z]\)|as\s+defined)/i.test(
+        fullAnswer
+      ),
   },
 ];
 
@@ -69,7 +81,7 @@ export function runDeterministicJudge(
   const warnings: string[] = [];
 
   // 1. Prohibited terms (exempt fact-check refutation; exempt procedural-status for guilt/innocence)
-  for (const { pattern, label } of PROHIBITED_PATTERNS) {
+  for (const { pattern, label, exempt } of PROHIBITED_PATTERNS) {
     const match = answer.match(pattern);
     if (match) {
       const line = getLineContaining(answer, match.index ?? 0);
@@ -78,7 +90,8 @@ export function runDeterministicJudge(
       const isProceduralExempt =
         label === "guilt/innocence" &&
         PROCEDURAL_STATUS_EXEMPT_DJ.some((p) => p.test(line));
-      if (isFactCheckExempt || isProceduralExempt) continue;
+      const isCustomExempt = exempt?.(line, answer);
+      if (isFactCheckExempt || isProceduralExempt || isCustomExempt) continue;
       return {
         pass: false,
         reason: `Prohibited term: ${label} ("${match[0]}")`,
