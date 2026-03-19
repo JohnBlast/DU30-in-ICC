@@ -30,5 +30,15 @@ __pycache__/
 .venv/
 venv/
 
-# learning docs
+# learning docs (personal notes, not for repo)
 LEARNING*.md
+*LEARNING*.md
+NOTES*.md
+*NOTES*.md
+learnings/
+*.learnings.md
+
+# project-internal (workflow, prompts archive, handoff)
+Guides/
+prompts/archive/
+handoff-checklist.md
